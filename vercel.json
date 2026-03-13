@@ -10,6 +10,10 @@
     {
       "source": "/static/:path*",
       "destination": "https://huobao-drama-production-d66c.up.railway.app/static/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

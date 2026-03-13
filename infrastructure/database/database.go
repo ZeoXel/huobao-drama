@@ -109,45 +109,60 @@ func InitDefaultAIConfigs(db *gorm.DB) error {
 	}
 
 	openaiKey := os.Getenv("OPENAI_API_KEY")
-	doubaoKey := os.Getenv("DOUBAO_API_KEY")
-	if openaiKey == "" && doubaoKey == "" {
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	chatfireKey := os.Getenv("CHATFIRE_API_KEY")
+	volcesKey := os.Getenv("VOLCES_API_KEY")
+
+	if openaiKey == "" && geminiKey == "" && chatfireKey == "" && volcesKey == "" {
 		return nil
 	}
 
 	configs := []models.AIServiceConfig{}
-	if openaiKey != "" {
+
+	// 文本生成 - Gemini
+	geminiKey := os.Getenv("GEMINI_API_KEY")
+	if geminiKey != "" {
 		configs = append(configs, models.AIServiceConfig{
 			ServiceType: "text",
-			Provider:    "openai",
-			Name:        "OpenAI GPT-4",
-			BaseURL:     getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-			APIKey:      openaiKey,
-			Model:       models.ModelField{"gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"},
-			Endpoint:    "/chat/completions",
+			Provider:    "gemini",
+			Name:        "Google Gemini",
+			BaseURL:     getEnv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
+			APIKey:      geminiKey,
+			Model:       models.ModelField{"gemini-3-flash-preview", "gemini-2.5-pro"},
+			Endpoint:    "/models/gemini-3-flash-preview:generateContent",
 			Priority:    1,
 			IsDefault:   true,
 			IsActive:    true,
-		}, models.AIServiceConfig{
+		})
+	}
+
+	// 图片生成 - Chatfire (nano-banana-pro)
+	chatfireKey := os.Getenv("CHATFIRE_API_KEY")
+	if chatfireKey != "" {
+		configs = append(configs, models.AIServiceConfig{
 			ServiceType: "image",
-			Provider:    "openai",
-			Name:        "OpenAI DALL-E",
-			BaseURL:     getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-			APIKey:      openaiKey,
-			Model:       models.ModelField{"dall-e-3", "dall-e-2"},
+			Provider:    "chatfire",
+			Name:        "Chatfire Image",
+			BaseURL:     getEnv("CHATFIRE_BASE_URL", "https://api.chatfire.site/v1"),
+			APIKey:      chatfireKey,
+			Model:       models.ModelField{"nano-banana-pro"},
 			Endpoint:    "/images/generations",
 			Priority:    1,
 			IsDefault:   true,
 			IsActive:    true,
 		})
 	}
-	if doubaoKey != "" {
+
+	// 视频生成 - 火山引擎 (seedance-1.5-pro)
+	volcesKey := os.Getenv("VOLCES_API_KEY")
+	if volcesKey != "" {
 		configs = append(configs, models.AIServiceConfig{
 			ServiceType:   "video",
-			Provider:      "doubao",
-			Name:          "豆包视频生成",
-			BaseURL:       getEnv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
-			APIKey:        doubaoKey,
-			Model:         models.ModelField{"doubao-video-pro"},
+			Provider:      "volces",
+			Name:          "火山引擎视频",
+			BaseURL:       getEnv("VOLCES_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
+			APIKey:        volcesKey,
+			Model:         models.ModelField{"doubao-seedance-1-5-pro-251215"},
 			Endpoint:      "/video/submit",
 			QueryEndpoint: "/video/query",
 			Priority:      1,

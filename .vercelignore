@@ -1,0 +1,23 @@
+# 只忽略根目录的后端代码
+/api/
+/application/
+/cmd/
+/configs/
+/data/
+/domain/
+/infrastructure/
+/migrations/
+/pkg/
+/*.go
+/go.mod
+/go.sum
+/main.go
+
+# 忽略其他不需要的文件
+.git/
+.github/
+/scripts/
+/*.sh
+*.md
+Dockerfile
+docker-compose.yml

@@ -1,0 +1,15 @@
+{
+  "buildCommand": "cd web && npm install && npm run build",
+  "outputDirectory": "web/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://huobao-drama-production-d66c.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/static/:path*",
+      "destination": "https://huobao-drama-production-d66c.up.railway.app/static/:path*"
+    }
+  ]
+}

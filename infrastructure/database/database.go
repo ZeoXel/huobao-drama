@@ -97,3 +97,73 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.AsyncTask{},
 	)
 }
+
+// InitDefaultAIConfigs 初始化默认 AI 配置（从环境变量读取）
+func InitDefaultAIConfigs(db *gorm.DB) error {
+	var count int64
+	if err := db.Model(&models.AIServiceConfig{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	openaiKey := os.Getenv("OPENAI_API_KEY")
+	doubaoKey := os.Getenv("DOUBAO_API_KEY")
+	if openaiKey == "" && doubaoKey == "" {
+		return nil
+	}
+
+	configs := []models.AIServiceConfig{}
+	if openaiKey != "" {
+		configs = append(configs, models.AIServiceConfig{
+			ServiceType: "text",
+			Provider:    "openai",
+			Name:        "OpenAI GPT-4",
+			BaseURL:     getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+			APIKey:      openaiKey,
+			Model:       models.ModelField{"gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"},
+			Endpoint:    "/chat/completions",
+			Priority:    1,
+			IsDefault:   true,
+			IsActive:    true,
+		}, models.AIServiceConfig{
+			ServiceType: "image",
+			Provider:    "openai",
+			Name:        "OpenAI DALL-E",
+			BaseURL:     getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+			APIKey:      openaiKey,
+			Model:       models.ModelField{"dall-e-3", "dall-e-2"},
+			Endpoint:    "/images/generations",
+			Priority:    1,
+			IsDefault:   true,
+			IsActive:    true,
+		})
+	}
+	if doubaoKey != "" {
+		configs = append(configs, models.AIServiceConfig{
+			ServiceType:   "video",
+			Provider:      "doubao",
+			Name:          "豆包视频生成",
+			BaseURL:       getEnv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"),
+			APIKey:        doubaoKey,
+			Model:         models.ModelField{"doubao-video-pro"},
+			Endpoint:      "/video/submit",
+			QueryEndpoint: "/video/query",
+			Priority:      1,
+			IsDefault:     true,
+			IsActive:      true,
+		})
+	}
+	if len(configs) > 0 {
+		return db.Create(&configs).Error
+	}
+	return nil
+}
+
+func getEnv(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}

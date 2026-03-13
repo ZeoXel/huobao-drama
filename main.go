@@ -41,6 +41,13 @@ func main() {
 	}
 	logr.Info("Database tables migrated successfully")
 
+	// 初始化默认 AI 配置
+	if err := database.InitDefaultAIConfigs(db); err != nil {
+		logr.Warn("Failed to initialize default AI configs", "error", err)
+	} else {
+		logr.Info("Default AI configs initialized")
+	}
+
 	// 初始化本地存储
 	var localStorage *storage.LocalStorage
 	if cfg.Storage.Type == "local" {

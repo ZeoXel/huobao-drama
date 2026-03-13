@@ -62,11 +62,12 @@ const routes: RouteRecordRaw[] = [
     name: 'ProfessionalEditor',
     component: () => import('../views/drama/ProfessionalEditor.vue')
   },
-  {
-    path: '/settings/ai-config',
-    name: 'AIConfig',
-    component: () => import('../views/settings/AIConfig.vue')
-  }
+  // AI 配置已通过环境变量自动初始化，隐藏前端配置界面
+  // {
+  //   path: '/settings/ai-config',
+  //   name: 'AIConfig',
+  //   component: () => import('../views/settings/AIConfig.vue')
+  // }
 ]
 
 const router = createRouter({

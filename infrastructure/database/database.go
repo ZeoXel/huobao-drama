@@ -120,7 +120,6 @@ func InitDefaultAIConfigs(db *gorm.DB) error {
 	configs := []models.AIServiceConfig{}
 
 	// 文本生成 - Gemini
-	geminiKey := os.Getenv("GEMINI_API_KEY")
 	if geminiKey != "" {
 		configs = append(configs, models.AIServiceConfig{
 			ServiceType: "text",
@@ -137,7 +136,6 @@ func InitDefaultAIConfigs(db *gorm.DB) error {
 	}
 
 	// 图片生成 - Chatfire (nano-banana-pro)
-	chatfireKey := os.Getenv("CHATFIRE_API_KEY")
 	if chatfireKey != "" {
 		configs = append(configs, models.AIServiceConfig{
 			ServiceType: "image",
@@ -154,7 +152,6 @@ func InitDefaultAIConfigs(db *gorm.DB) error {
 	}
 
 	// 视频生成 - 火山引擎 (seedance-1.5-pro)
-	volcesKey := os.Getenv("VOLCES_API_KEY")
 	if volcesKey != "" {
 		configs = append(configs, models.AIServiceConfig{
 			ServiceType:   "video",

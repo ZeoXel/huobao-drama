@@ -1,9 +1,9 @@
 import type { Asset } from './asset'
 
 export interface Timeline {
-  id: number
-  drama_id: number
-  episode_id?: number
+  id: number | string
+  drama_id: number | string
+  episode_id?: number | string
   name: string
   description?: string
   duration: number
@@ -18,8 +18,8 @@ export interface Timeline {
 export type TimelineStatus = 'draft' | 'editing' | 'completed' | 'exporting'
 
 export interface TimelineTrack {
-  id: number
-  timeline_id: number
+  id: number | string
+  timeline_id: number | string
   name: string
   type: TrackType
   order: number
@@ -33,11 +33,16 @@ export interface TimelineTrack {
 export type TrackType = 'video' | 'audio' | 'text'
 
 export interface TimelineClip {
-  id: number
-  track_id: number
-  asset_id?: number
+  id: number | string
+  track_id: number | string
+  asset_id?: number | string
   asset?: Asset
-  scene_id?: number
+  scene_id?: number | string
+  storyboard_id?: number | string
+  storyboard_number?: number | string
+  source_clip_id?: string
+  audio_url?: string
+  video_url?: string
   name: string
   start_time: number
   end_time: number
@@ -54,22 +59,48 @@ export interface TimelineClip {
   in_transition?: ClipTransition
   out_transition?: ClipTransition
   effects?: ClipEffect[]
-  created_at: string
+  created_at?: string
+  [key: string]: any
 }
 
 export interface ClipTransition {
-  id: number
+  id: number | string
   type: TransitionType
   duration: number
   easing?: string
   config?: Record<string, any>
 }
 
-export type TransitionType = 'fade' | 'crossfade' | 'slide' | 'wipe' | 'zoom' | 'dissolve'
+export type TransitionType =
+  | 'none'
+  | 'fade'
+  | 'fadeblack'
+  | 'fadewhite'
+  | 'fadegrays'
+  | 'crossfade'
+  | 'slide'
+  | 'slideleft'
+  | 'slideright'
+  | 'slideup'
+  | 'slidedown'
+  | 'wipe'
+  | 'wipeleft'
+  | 'wiperight'
+  | 'wipeup'
+  | 'wipedown'
+  | 'zoom'
+  | 'dissolve'
+  | 'circleopen'
+  | 'circleclose'
+  | 'distance'
+  | 'horzopen'
+  | 'horzclose'
+  | 'vertopen'
+  | 'vertclose'
 
 export interface ClipEffect {
-  id: number
-  clip_id: number
+  id: number | string
+  clip_id: number | string
   type: EffectType
   name: string
   is_enabled: boolean
@@ -80,8 +111,8 @@ export interface ClipEffect {
 export type EffectType = 'filter' | 'color' | 'blur' | 'brightness' | 'contrast' | 'saturation'
 
 export interface CreateTimelineRequest {
-  drama_id: number
-  episode_id?: number
+  drama_id: number | string
+  episode_id?: number | string
   name: string
   description?: string
   fps?: number
@@ -112,9 +143,9 @@ export interface UpdateTrackRequest {
 }
 
 export interface CreateClipRequest {
-  track_id: number
-  asset_id?: number
-  scene_id?: number
+  track_id: number | string
+  asset_id?: number | string
+  scene_id?: number | string
   name?: string
   start_time: number
   duration: number

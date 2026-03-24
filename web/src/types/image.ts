@@ -1,9 +1,9 @@
 export interface ImageGeneration {
-  id: number
-  storyboard_id?: number
+  id: number | string
+  storyboard_id?: number | string
   scene_id?: string
   drama_id: string
-  character_id?: number
+  character_id?: number | string
   image_type?: string
   frame_type?: string
   provider: string
@@ -34,8 +34,8 @@ export type ImageStatus = 'pending' | 'processing' | 'completed' | 'failed'
 export type ImageProvider = 'openai' | 'dalle' | 'midjourney' | 'stable_diffusion' | 'sd'
 
 export interface GenerateImageRequest {
-  scene_id?: number
-  storyboard_id?: number
+  scene_id?: number | string
+  storyboard_id?: number | string
   drama_id: string
   image_type?: string
   frame_type?: string
@@ -57,7 +57,7 @@ export interface GenerateImageRequest {
 export interface ImageGenerationListParams {
   drama_id?: string
   scene_id?: string
-  storyboard_id?: number
+  storyboard_id?: number | string
   frame_type?: string
   status?: ImageStatus
   page?: number

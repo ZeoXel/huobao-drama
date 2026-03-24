@@ -29,7 +29,7 @@ func (h *VideoMergeHandler) MergeVideos(c *gin.Context) {
 		return
 	}
 
-	merge, err := h.mergeService.MergeVideos(&req)
+	merge, err := h.mergeService.MergeVideos(currentUserID(c), currentAPIKey(c), &req)
 	if err != nil {
 		h.log.Errorw("Failed to merge videos", "error", err)
 		response.InternalError(c, err.Error())
@@ -50,7 +50,7 @@ func (h *VideoMergeHandler) GetMerge(c *gin.Context) {
 		return
 	}
 
-	merge, err := h.mergeService.GetMerge(uint(mergeID))
+	merge, err := h.mergeService.GetMerge(currentUserID(c), uint(mergeID))
 	if err != nil {
 		h.log.Errorw("Failed to get merge", "error", err)
 		response.NotFound(c, "Merge not found")
@@ -71,7 +71,7 @@ func (h *VideoMergeHandler) ListMerges(c *gin.Context) {
 		episodeIDPtr = &episodeID
 	}
 
-	merges, total, err := h.mergeService.ListMerges(episodeIDPtr, status, page, pageSize)
+	merges, total, err := h.mergeService.ListMerges(currentUserID(c), episodeIDPtr, status, page, pageSize)
 	if err != nil {
 		h.log.Errorw("Failed to list merges", "error", err)
 		response.InternalError(c, err.Error())
@@ -94,7 +94,7 @@ func (h *VideoMergeHandler) DeleteMerge(c *gin.Context) {
 		return
 	}
 
-	if err := h.mergeService.DeleteMerge(uint(mergeID)); err != nil {
+	if err := h.mergeService.DeleteMerge(currentUserID(c), uint(mergeID)); err != nil {
 		h.log.Errorw("Failed to delete merge", "error", err)
 		response.InternalError(c, err.Error())
 		return

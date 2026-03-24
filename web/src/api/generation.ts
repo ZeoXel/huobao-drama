@@ -1,5 +1,7 @@
 import type {
-    GenerateCharactersRequest
+    GenerateCharactersRequest,
+    ParseScriptRequest,
+    ParseScriptResult
 } from '../types/generation'
 import request from '../utils/request'
 
@@ -9,6 +11,14 @@ export const generationAPI = {
   },
 
   generateStoryboard(episodeId: string, model?: string) {
+    return request.post<{ task_id: string; status: string; message: string }>(`/episodes/${episodeId}/storyboards`, { model })
+  },
+
+  parseScript(data: ParseScriptRequest) {
+    return request.post<ParseScriptResult>('/generation/parse-script', data)
+  },
+
+  generateShots(episodeId: string, model?: string) {
     return request.post<{ task_id: string; status: string; message: string }>(`/episodes/${episodeId}/storyboards`, { model })
   },
 

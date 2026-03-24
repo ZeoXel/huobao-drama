@@ -52,8 +52,10 @@ type DramaListQuery struct {
 	Keyword  string `form:"keyword"`
 }
 
-func (s *DramaService) CreateDrama(req *CreateDramaRequest) (*models.Drama, error) {
+func (s *DramaService) CreateDrama(userID string, req *CreateDramaRequest) (*models.Drama, error) {
+	userID = normalizeUserID(userID)
 	drama := &models.Drama{
+		UserID: userID,
 		Title:  req.Title,
 		Status: "draft",
 		Style:  "ghibli", // 默认风格
@@ -78,9 +80,10 @@ func (s *DramaService) CreateDrama(req *CreateDramaRequest) (*models.Drama, erro
 	return drama, nil
 }
 
-func (s *DramaService) GetDrama(dramaID string) (*models.Drama, error) {
+func (s *DramaService) GetDrama(userID string, dramaID string) (*models.Drama, error) {
+	userID = normalizeUserID(userID)
 	var drama models.Drama
-	err := s.db.Where("id = ? ", dramaID).
+	err := s.db.Where("id = ? AND user_id = ?", dramaID, userID).
 		Preload("Characters").          // 加载Drama级别的角色
 		Preload("Scenes").              // 加载Drama级别的场景
 		Preload("Props").               // 加载Drama级别的道具
@@ -119,8 +122,8 @@ func (s *DramaService) GetDrama(dramaID string) (*models.Drama, error) {
 		for j := range drama.Episodes[i].Characters {
 			var imageGen models.ImageGeneration
 			// 查询进行中或失败的任务状态
-			err := s.db.Where("character_id = ? AND (status = ? OR status = ?)",
-				drama.Episodes[i].Characters[j].ID, "pending", "processing").
+			err := s.db.Where("user_id = ? AND character_id = ? AND (status = ? OR status = ?)",
+				userID, drama.Episodes[i].Characters[j].ID, "pending", "processing").
 				Order("created_at DESC").
 				First(&imageGen).Error
 
@@ -133,8 +136,8 @@ func (s *DramaService) GetDrama(dramaID string) (*models.Drama, error) {
 				}
 			} else if errors.Is(err, gorm.ErrRecordNotFound) {
 				// 检查是否有失败的记录
-				err := s.db.Where("character_id = ? AND status = ?",
-					drama.Episodes[i].Characters[j].ID, "failed").
+				err := s.db.Where("user_id = ? AND character_id = ? AND status = ?",
+					userID, drama.Episodes[i].Characters[j].ID, "failed").
 					Order("created_at DESC").
 					First(&imageGen).Error
 
@@ -152,8 +155,8 @@ func (s *DramaService) GetDrama(dramaID string) (*models.Drama, error) {
 		for j := range drama.Episodes[i].Scenes {
 			var imageGen models.ImageGeneration
 			// 查询进行中或失败的任务状态
-			err := s.db.Where("scene_id = ? AND (status = ? OR status = ?)",
-				drama.Episodes[i].Scenes[j].ID, "pending", "processing").
+			err := s.db.Where("user_id = ? AND scene_id = ? AND (status = ? OR status = ?)",
+				userID, drama.Episodes[i].Scenes[j].ID, "pending", "processing").
 				Order("created_at DESC").
 				First(&imageGen).Error
 
@@ -166,8 +169,8 @@ func (s *DramaService) GetDrama(dramaID string) (*models.Drama, error) {
 				}
 			} else if errors.Is(err, gorm.ErrRecordNotFound) {
 				// 检查是否有失败的记录
-				err := s.db.Where("scene_id = ? AND status = ?",
-					drama.Episodes[i].Scenes[j].ID, "failed").
+				err := s.db.Where("user_id = ? AND scene_id = ? AND status = ?",
+					userID, drama.Episodes[i].Scenes[j].ID, "failed").
 					Order("created_at DESC").
 					First(&imageGen).Error
 
@@ -203,11 +206,12 @@ func (s *DramaService) GetDrama(dramaID string) (*models.Drama, error) {
 	return &drama, nil
 }
 
-func (s *DramaService) ListDramas(query *DramaListQuery) ([]models.Drama, int64, error) {
+func (s *DramaService) ListDramas(userID string, query *DramaListQuery) ([]models.Drama, int64, error) {
+	userID = normalizeUserID(userID)
 	var dramas []models.Drama
 	var total int64
 
-	db := s.db.Model(&models.Drama{})
+	db := s.db.Model(&models.Drama{}).Where("user_id = ?", userID)
 
 	if query.Status != "" {
 		db = db.Where("status = ?", query.Status)
@@ -256,9 +260,10 @@ func (s *DramaService) ListDramas(query *DramaListQuery) ([]models.Drama, int64,
 	return dramas, total, nil
 }
 
-func (s *DramaService) UpdateDrama(dramaID string, req *UpdateDramaRequest) (*models.Drama, error) {
+func (s *DramaService) UpdateDrama(userID string, dramaID string, req *UpdateDramaRequest) (*models.Drama, error) {
+	userID = normalizeUserID(userID)
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", dramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", dramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("drama not found")
 		}
@@ -297,8 +302,9 @@ func (s *DramaService) UpdateDrama(dramaID string, req *UpdateDramaRequest) (*mo
 	return &drama, nil
 }
 
-func (s *DramaService) DeleteDrama(dramaID string) error {
-	result := s.db.Where("id = ? ", dramaID).Delete(&models.Drama{})
+func (s *DramaService) DeleteDrama(userID string, dramaID string) error {
+	userID = normalizeUserID(userID)
+	result := s.db.Where("id = ? AND user_id = ?", dramaID, userID).Delete(&models.Drama{})
 
 	if result.Error != nil {
 		s.log.Errorw("Failed to delete drama", "error", result.Error)
@@ -313,18 +319,20 @@ func (s *DramaService) DeleteDrama(dramaID string) error {
 	return nil
 }
 
-func (s *DramaService) GetDramaStats() (map[string]interface{}, error) {
+func (s *DramaService) GetDramaStats(userID string) (map[string]interface{}, error) {
+	userID = normalizeUserID(userID)
 	var total int64
 	var byStatus []struct {
 		Status string
 		Count  int64
 	}
 
-	if err := s.db.Model(&models.Drama{}).Count(&total).Error; err != nil {
+	if err := s.db.Model(&models.Drama{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
 		return nil, err
 	}
 
 	if err := s.db.Model(&models.Drama{}).
+		Where("user_id = ?", userID).
 		Select("status, count(*) as count").
 		Group("status").
 		Scan(&byStatus).Error; err != nil {
@@ -360,9 +368,10 @@ type SaveEpisodesRequest struct {
 	Episodes []models.Episode `json:"episodes" binding:"required"`
 }
 
-func (s *DramaService) SaveOutline(dramaID string, req *SaveOutlineRequest) error {
+func (s *DramaService) SaveOutline(userID string, dramaID string, req *SaveOutlineRequest) error {
+	userID = normalizeUserID(userID)
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", dramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", dramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("drama not found")
 		}
@@ -397,9 +406,10 @@ func (s *DramaService) SaveOutline(dramaID string, req *SaveOutlineRequest) erro
 	return nil
 }
 
-func (s *DramaService) GetCharacters(dramaID string, episodeID *string) ([]models.Character, error) {
+func (s *DramaService) GetCharacters(userID string, dramaID string, episodeID *string) ([]models.Character, error) {
+	userID = normalizeUserID(userID)
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", dramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", dramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("drama not found")
 		}
@@ -430,7 +440,7 @@ func (s *DramaService) GetCharacters(dramaID string, episodeID *string) ([]model
 	for i := range characters {
 		// 查询该角色最新的图片生成任务
 		var imageGen models.ImageGeneration
-		err := s.db.Where("character_id = ?", characters[i].ID).
+		err := s.db.Where("user_id = ? AND character_id = ?", userID, characters[i].ID).
 			Order("created_at DESC").
 			First(&imageGen).Error
 
@@ -452,7 +462,8 @@ func (s *DramaService) GetCharacters(dramaID string, episodeID *string) ([]model
 	return characters, nil
 }
 
-func (s *DramaService) SaveCharacters(dramaID string, req *SaveCharactersRequest) error {
+func (s *DramaService) SaveCharacters(userID string, dramaID string, req *SaveCharactersRequest) error {
+	userID = normalizeUserID(userID)
 	// 转换dramaID
 	id, err := strconv.ParseUint(dramaID, 10, 32)
 	if err != nil {
@@ -461,7 +472,7 @@ func (s *DramaService) SaveCharacters(dramaID string, req *SaveCharactersRequest
 	dramaIDUint := uint(id)
 
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", dramaIDUint).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", dramaIDUint, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("drama not found")
 		}
@@ -576,7 +587,8 @@ func (s *DramaService) SaveCharacters(dramaID string, req *SaveCharactersRequest
 	return nil
 }
 
-func (s *DramaService) SaveEpisodes(dramaID string, req *SaveEpisodesRequest) error {
+func (s *DramaService) SaveEpisodes(userID string, dramaID string, req *SaveEpisodesRequest) error {
+	userID = normalizeUserID(userID)
 	// 转换dramaID
 	id, err := strconv.ParseUint(dramaID, 10, 32)
 	if err != nil {
@@ -585,7 +597,7 @@ func (s *DramaService) SaveEpisodes(dramaID string, req *SaveEpisodesRequest) er
 	dramaIDUint := uint(id)
 
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", dramaIDUint).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", dramaIDUint, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("drama not found")
 		}
@@ -624,9 +636,10 @@ func (s *DramaService) SaveEpisodes(dramaID string, req *SaveEpisodesRequest) er
 	return nil
 }
 
-func (s *DramaService) SaveProgress(dramaID string, req *SaveProgressRequest) error {
+func (s *DramaService) SaveProgress(userID string, dramaID string, req *SaveProgressRequest) error {
+	userID = normalizeUserID(userID)
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", dramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", dramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("drama not found")
 		}

@@ -321,7 +321,7 @@ You must return a **JSON object** with the following structure:
   "description": "Complete action sequence of a swordsman in black from drawing a blade to striking."
 }
 
-`, style, imageRatio)
+`, imageRatio)
 	}
 
 	return fmt.Sprintf(`**Role:** 你是一位精通视觉叙事与图像生成提示词的专家。你需要生成一个描述 3x3 九宫格动作序列的提示词。

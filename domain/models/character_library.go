@@ -9,6 +9,7 @@ import (
 // CharacterLibrary 角色库模型
 type CharacterLibrary struct {
 	ID          uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID      string         `gorm:"type:varchar(64);index;not null;default:'standalone'" json:"user_id"`
 	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
 	Category    *string        `gorm:"type:varchar(50)" json:"category"`
 	ImageURL    string         `gorm:"type:varchar(500);not null" json:"image_url"`

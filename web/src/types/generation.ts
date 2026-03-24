@@ -27,11 +27,12 @@ export interface ParsedCharacter {
 }
 
 export interface ParsedEpisode {
-  episode_number: number
+  episode_number: number | string
   title: string
   description: string
   script_content: string
   duration: number
+  scenes?: any[]
   chapter_start?: number
   chapter_end?: number
   start_marker?: string

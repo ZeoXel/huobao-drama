@@ -39,7 +39,7 @@ func (h *ImageGenerationHandler) GenerateImage(c *gin.Context) {
 		return
 	}
 
-	imageGen, err := h.imageService.GenerateImage(&req)
+	imageGen, err := h.imageService.GenerateImage(currentUserID(c), currentAPIKey(c), &req)
 	if err != nil {
 		h.log.Errorw("Failed to generate image", "error", err)
 		response.InternalError(c, err.Error())
@@ -53,7 +53,7 @@ func (h *ImageGenerationHandler) GenerateImagesForScene(c *gin.Context) {
 
 	sceneID := c.Param("scene_id")
 
-	images, err := h.imageService.GenerateImagesForScene(sceneID)
+	images, err := h.imageService.GenerateImagesForScene(currentUserID(c), currentAPIKey(c), sceneID)
 	if err != nil {
 		h.log.Errorw("Failed to generate images for scene", "error", err)
 		response.InternalError(c, err.Error())
@@ -67,7 +67,7 @@ func (h *ImageGenerationHandler) GetBackgroundsForEpisode(c *gin.Context) {
 
 	episodeID := c.Param("episode_id")
 
-	backgrounds, err := h.imageService.GetScencesForEpisode(episodeID)
+	backgrounds, err := h.imageService.GetScencesForEpisode(currentUserID(c), episodeID)
 	if err != nil {
 		h.log.Errorw("Failed to get backgrounds", "error", err)
 		response.InternalError(c, err.Error())
@@ -93,13 +93,16 @@ func (h *ImageGenerationHandler) ExtractBackgroundsForEpisode(c *gin.Context) {
 	// 如果style为空，从episode获取drama的style
 	if req.Style == "" {
 		var episode models.Episode
-		if err := h.db.Preload("Drama").First(&episode, episodeID).Error; err == nil {
+		if err := h.db.Preload("Drama").
+			Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+			Where("episodes.id = ? AND dramas.user_id = ?", episodeID, currentUserID(c)).
+			First(&episode).Error; err == nil {
 			req.Style = episode.Drama.Style
 		}
 	}
 
 	// 直接调用服务层的异步方法，该方法会创建任务并返回任务ID
-	taskID, err := h.imageService.ExtractBackgroundsForEpisode(episodeID, req.Model, req.Style)
+	taskID, err := h.imageService.ExtractBackgroundsForEpisode(currentUserID(c), currentAPIKey(c), episodeID, req.Model, req.Style)
 	if err != nil {
 		h.log.Errorw("Failed to extract backgrounds", "error", err, "episode_id", episodeID)
 		response.InternalError(c, err.Error())
@@ -118,7 +121,7 @@ func (h *ImageGenerationHandler) BatchGenerateForEpisode(c *gin.Context) {
 
 	episodeID := c.Param("episode_id")
 
-	images, err := h.imageService.BatchGenerateImagesForEpisode(episodeID)
+	images, err := h.imageService.BatchGenerateImagesForEpisode(currentUserID(c), currentAPIKey(c), episodeID)
 	if err != nil {
 		h.log.Errorw("Failed to batch generate images", "error", err)
 		response.InternalError(c, err.Error())
@@ -136,7 +139,7 @@ func (h *ImageGenerationHandler) GetImageGeneration(c *gin.Context) {
 		return
 	}
 
-	imageGen, err := h.imageService.GetImageGeneration(uint(imageGenID))
+	imageGen, err := h.imageService.GetImageGeneration(currentUserID(c), uint(imageGenID))
 	if err != nil {
 		response.NotFound(c, "图片生成记录不存在")
 		return
@@ -183,7 +186,7 @@ func (h *ImageGenerationHandler) ListImageGenerations(c *gin.Context) {
 		dramaIDUint = &didUint
 	}
 
-	images, total, err := h.imageService.ListImageGenerations(dramaIDUint, sceneID, storyboardID, frameType, status, page, pageSize)
+	images, total, err := h.imageService.ListImageGenerations(currentUserID(c), dramaIDUint, sceneID, storyboardID, frameType, status, page, pageSize)
 
 	if err != nil {
 		h.log.Errorw("Failed to list images", "error", err)
@@ -202,7 +205,7 @@ func (h *ImageGenerationHandler) DeleteImageGeneration(c *gin.Context) {
 		return
 	}
 
-	if err := h.imageService.DeleteImageGeneration(uint(imageGenID)); err != nil {
+	if err := h.imageService.DeleteImageGeneration(currentUserID(c), uint(imageGenID)); err != nil {
 		h.log.Errorw("Failed to delete image", "error", err)
 		response.InternalError(c, err.Error())
 		return
@@ -226,7 +229,7 @@ func (h *ImageGenerationHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
-	imageGen, err := h.imageService.CreateImageFromUpload(&services.UploadImageRequest{
+	imageGen, err := h.imageService.CreateImageFromUpload(currentUserID(c), &services.UploadImageRequest{
 		StoryboardID: req.StoryboardID,
 		DramaID:      req.DramaID,
 		FrameType:    req.FrameType,

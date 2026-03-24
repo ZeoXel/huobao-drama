@@ -47,10 +47,14 @@ type MergeVideoRequest struct {
 	Model     string             `json:"model"`
 }
 
-func (s *VideoMergeService) MergeVideos(req *MergeVideoRequest) (*models.VideoMerge, error) {
+func (s *VideoMergeService) MergeVideos(userID string, apiKey string, req *MergeVideoRequest) (*models.VideoMerge, error) {
+	userID = normalizeUserID(userID)
 	// 验证episode权限
 	var episode models.Episode
-	if err := s.db.Preload("Drama").Where("id = ?", req.EpisodeID).First(&episode).Error; err != nil {
+	if err := s.db.Preload("Drama").
+		Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("episodes.id = ? AND dramas.user_id = ?", req.EpisodeID, userID).
+		First(&episode).Error; err != nil {
 		return nil, fmt.Errorf("episode not found")
 	}
 
@@ -80,6 +84,7 @@ func (s *VideoMergeService) MergeVideos(req *MergeVideoRequest) (*models.VideoMe
 	dramaID, _ := strconv.ParseUint(req.DramaID, 10, 32)
 
 	videoMerge := &models.VideoMerge{
+		UserID:    userID,
 		EpisodeID: uint(epID),
 		DramaID:   uint(dramaID),
 		Title:     req.Title,
@@ -93,12 +98,12 @@ func (s *VideoMergeService) MergeVideos(req *MergeVideoRequest) (*models.VideoMe
 		return nil, fmt.Errorf("failed to create merge record: %w", err)
 	}
 
-	go s.processMergeVideo(videoMerge.ID)
+	go s.processMergeVideo(videoMerge.ID, apiKey)
 
 	return videoMerge, nil
 }
 
-func (s *VideoMergeService) processMergeVideo(mergeID uint) {
+func (s *VideoMergeService) processMergeVideo(mergeID uint, apiKey string) {
 	var videoMerge models.VideoMerge
 	if err := s.db.First(&videoMerge, mergeID).Error; err != nil {
 		s.log.Errorw("Failed to load video merge", "error", err, "id", mergeID)
@@ -107,7 +112,7 @@ func (s *VideoMergeService) processMergeVideo(mergeID uint) {
 
 	s.db.Model(&videoMerge).Update("status", models.VideoMergeStatusProcessing)
 
-	client, err := s.getVideoClient(videoMerge.Provider)
+	client, err := s.getVideoClient(videoMerge.Provider, apiKey)
 	if err != nil {
 		s.updateMergeError(mergeID, err.Error())
 		return
@@ -290,8 +295,8 @@ func (s *VideoMergeService) updateMergeError(mergeID uint, errorMsg string) {
 	s.log.Errorw("Video merge failed", "id", mergeID, "error", errorMsg)
 }
 
-func (s *VideoMergeService) getVideoClient(provider string) (video.VideoClient, error) {
-	config, err := s.aiService.GetDefaultConfig("video")
+func (s *VideoMergeService) getVideoClient(provider string, apiKey string) (video.VideoClient, error) {
+	config, err := s.aiService.GetDefaultConfigWithAPIKey("video", apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get video config: %w", err)
 	}
@@ -330,16 +335,18 @@ func (s *VideoMergeService) getVideoClient(provider string) (video.VideoClient, 
 	}
 }
 
-func (s *VideoMergeService) GetMerge(mergeID uint) (*models.VideoMerge, error) {
+func (s *VideoMergeService) GetMerge(userID string, mergeID uint) (*models.VideoMerge, error) {
+	userID = normalizeUserID(userID)
 	var merge models.VideoMerge
-	if err := s.db.Where("id = ? ", mergeID).First(&merge).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", mergeID, userID).First(&merge).Error; err != nil {
 		return nil, err
 	}
 	return &merge, nil
 }
 
-func (s *VideoMergeService) ListMerges(episodeID *string, status string, page, pageSize int) ([]models.VideoMerge, int64, error) {
-	query := s.db.Model(&models.VideoMerge{})
+func (s *VideoMergeService) ListMerges(userID string, episodeID *string, status string, page, pageSize int) ([]models.VideoMerge, int64, error) {
+	userID = normalizeUserID(userID)
+	query := s.db.Model(&models.VideoMerge{}).Where("user_id = ?", userID)
 
 	if episodeID != nil && *episodeID != "" {
 		query = query.Where("episode_id = ?", *episodeID)
@@ -363,8 +370,9 @@ func (s *VideoMergeService) ListMerges(episodeID *string, status string, page, p
 	return merges, total, nil
 }
 
-func (s *VideoMergeService) DeleteMerge(mergeID uint) error {
-	result := s.db.Where("id = ? ", mergeID).Delete(&models.VideoMerge{})
+func (s *VideoMergeService) DeleteMerge(userID string, mergeID uint) error {
+	userID = normalizeUserID(userID)
+	result := s.db.Where("id = ? AND user_id = ?", mergeID, userID).Delete(&models.VideoMerge{})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -409,10 +417,14 @@ type FinalizeEpisodeRequest struct {
 }
 
 // FinalizeEpisode 完成集数制作，根据时间线场景顺序合成最终视频
-func (s *VideoMergeService) FinalizeEpisode(episodeID string, timelineData *FinalizeEpisodeRequest) (map[string]interface{}, error) {
+func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episodeID string, timelineData *FinalizeEpisodeRequest) (map[string]interface{}, error) {
+	userID = normalizeUserID(userID)
 	// 验证episode存在且属于该用户
 	var episode models.Episode
-	if err := s.db.Preload("Drama").Preload("Storyboards").Where("id = ?", episodeID).First(&episode).Error; err != nil {
+	if err := s.db.Preload("Drama").Preload("Storyboards").
+		Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("episodes.id = ? AND dramas.user_id = ?", episodeID, userID).
+		First(&episode).Error; err != nil {
 		return nil, fmt.Errorf("episode not found")
 	}
 
@@ -439,7 +451,7 @@ func (s *VideoMergeService) FinalizeEpisode(episodeID string, timelineData *Fina
 			if assetIDStr != "" {
 				// 从素材库获取视频，优先使用 local_path
 				var asset models.Asset
-				if err := s.db.Where("id = ? AND type = ?", assetIDStr, models.AssetTypeVideo).First(&asset).Error; err == nil {
+				if err := s.db.Where("id = ? AND type = ? AND user_id = ?", assetIDStr, models.AssetTypeVideo, userID).First(&asset).Error; err == nil {
 					// 优先使用 local_path
 					if asset.LocalPath != nil && *asset.LocalPath != "" {
 						// 检查是否已经是完整路径
@@ -473,7 +485,7 @@ func (s *VideoMergeService) FinalizeEpisode(episodeID string, timelineData *Fina
 
 				// 查找关联的 video_generation 记录以获取 local_path
 				var videoGen models.VideoGeneration
-				if err := s.db.Where("storyboard_id = ? AND status = ?", scene.ID, "completed").Order("created_at DESC").First(&videoGen).Error; err == nil {
+				if err := s.db.Where("storyboard_id = ? AND status = ? AND user_id = ?", scene.ID, "completed", userID).Order("created_at DESC").First(&videoGen).Error; err == nil {
 					if videoGen.LocalPath != nil && *videoGen.LocalPath != "" {
 						// 检查是否已经是完整路径
 						if filepath.IsAbs(*videoGen.LocalPath) || filepath.HasPrefix(*videoGen.LocalPath, s.storagePath) {
@@ -623,7 +635,7 @@ func (s *VideoMergeService) FinalizeEpisode(episodeID string, timelineData *Fina
 	}
 
 	// 执行视频合成
-	videoMerge, err := s.MergeVideos(finalReq)
+	videoMerge, err := s.MergeVideos(userID, apiKey, finalReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start video merge: %w", err)
 	}

@@ -71,10 +71,15 @@ type MultiFramePrompt struct {
 }
 
 // GenerateFramePrompt 生成指定类型的帧提示词并保存到frame_prompts表
-func (s *FramePromptService) GenerateFramePrompt(req GenerateFramePromptRequest, model string) (string, error) {
+func (s *FramePromptService) GenerateFramePrompt(userID string, apiKey string, req GenerateFramePromptRequest, model string) (string, error) {
+	userID = normalizeUserID(userID)
 	// 查询分镜信息
 	var storyboard models.Storyboard
-	if err := s.db.Preload("Characters").First(&storyboard, req.StoryboardID).Error; err != nil {
+	if err := s.db.Preload("Characters").
+		Joins("JOIN episodes ON episodes.id = storyboards.episode_id").
+		Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("storyboards.id = ? AND dramas.user_id = ?", req.StoryboardID, userID).
+		First(&storyboard).Error; err != nil {
 		return "", fmt.Errorf("storyboard not found: %w", err)
 	}
 
@@ -86,20 +91,25 @@ func (s *FramePromptService) GenerateFramePrompt(req GenerateFramePromptRequest,
 	}
 
 	// 异步处理帧提示词生成
-	go s.processFramePromptGeneration(task.ID, req, model)
+	go s.processFramePromptGeneration(task.ID, userID, apiKey, req, model)
 
 	s.log.Infow("Frame prompt generation task created", "task_id", task.ID, "storyboard_id", req.StoryboardID, "frame_type", req.FrameType)
 	return task.ID, nil
 }
 
 // processFramePromptGeneration 异步处理帧提示词生成
-func (s *FramePromptService) processFramePromptGeneration(taskID string, req GenerateFramePromptRequest, model string) {
+func (s *FramePromptService) processFramePromptGeneration(taskID string, userID string, apiKey string, req GenerateFramePromptRequest, model string) {
+	userID = normalizeUserID(userID)
 	// 更新任务状态为处理中
 	s.taskService.UpdateTaskStatus(taskID, "processing", 0, "正在生成帧提示词...")
 
 	// 查询分镜信息
 	var storyboard models.Storyboard
-	if err := s.db.Preload("Characters").First(&storyboard, req.StoryboardID).Error; err != nil {
+	if err := s.db.Preload("Characters").
+		Joins("JOIN episodes ON episodes.id = storyboards.episode_id").
+		Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("storyboards.id = ? AND dramas.user_id = ?", req.StoryboardID, userID).
+		First(&storyboard).Error; err != nil {
 		s.log.Errorw("Storyboard not found during frame prompt generation", "error", err, "storyboard_id", req.StoryboardID)
 		s.taskService.UpdateTaskStatus(taskID, "failed", 0, "分镜信息不存在")
 		return
@@ -129,21 +139,21 @@ func (s *FramePromptService) processFramePromptGeneration(taskID string, req Gen
 	// 生成提示词
 	switch req.FrameType {
 	case FrameTypeFirst:
-		response.SingleFrame = s.generateFirstFrame(storyboard, scene, dramaStyle, model)
+		response.SingleFrame = s.generateFirstFrame(storyboard, scene, dramaStyle, model, apiKey)
 		// 保存单帧提示词
 		s.saveFramePrompt(req.StoryboardID, string(req.FrameType), response.SingleFrame.Prompt, response.SingleFrame.Description, "")
 	case FrameTypeKey:
-		response.SingleFrame = s.generateKeyFrame(storyboard, scene, dramaStyle, model)
+		response.SingleFrame = s.generateKeyFrame(storyboard, scene, dramaStyle, model, apiKey)
 		s.saveFramePrompt(req.StoryboardID, string(req.FrameType), response.SingleFrame.Prompt, response.SingleFrame.Description, "")
 	case FrameTypeLast:
-		response.SingleFrame = s.generateLastFrame(storyboard, scene, dramaStyle, model)
+		response.SingleFrame = s.generateLastFrame(storyboard, scene, dramaStyle, model, apiKey)
 		s.saveFramePrompt(req.StoryboardID, string(req.FrameType), response.SingleFrame.Prompt, response.SingleFrame.Description, "")
 	case FrameTypePanel:
 		count := req.PanelCount
 		if count == 0 {
 			count = 3
 		}
-		response.MultiFrame = s.generatePanelFrames(storyboard, scene, count, dramaStyle, model)
+		response.MultiFrame = s.generatePanelFrames(storyboard, scene, count, dramaStyle, model, apiKey)
 		// 保存多帧提示词（合并为一条记录）
 		var prompts []string
 		for _, frame := range response.MultiFrame.Frames {
@@ -152,7 +162,7 @@ func (s *FramePromptService) processFramePromptGeneration(taskID string, req Gen
 		combinedPrompt := strings.Join(prompts, "\n---\n")
 		s.saveFramePrompt(req.StoryboardID, string(req.FrameType), combinedPrompt, "分镜板组合提示词", response.MultiFrame.Layout)
 	case FrameTypeAction:
-		response.MultiFrame = s.generateActionSequence(storyboard, scene, dramaStyle, model)
+		response.MultiFrame = s.generateActionSequence(storyboard, scene, dramaStyle, model, apiKey)
 		var prompts []string
 		for _, frame := range response.MultiFrame.Frames {
 			prompts = append(prompts, frame.Prompt)
@@ -207,7 +217,7 @@ func mustParseUint(s string) uint64 {
 }
 
 // generateFirstFrame 生成首帧提示词
-func (s *FramePromptService) generateFirstFrame(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string) *SingleFramePrompt {
+func (s *FramePromptService) generateFirstFrame(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string, apiKey string) *SingleFramePrompt {
 	// 构建上下文信息
 	contextInfo := s.buildStoryboardContext(sb, scene)
 
@@ -219,15 +229,15 @@ func (s *FramePromptService) generateFirstFrame(sb models.Storyboard, scene *mod
 	var aiResponse string
 	var err error
 	if model != "" {
-		client, getErr := s.aiService.GetAIClientForModel("text", model)
+		client, getErr := s.aiService.GetAIClientForModelWithAPIKey("text", model, apiKey)
 		if getErr != nil {
 			s.log.Warnw("Failed to get client for specified model, using default", "model", model, "error", getErr)
-			aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+			aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 		} else {
 			aiResponse, err = client.GenerateText(userPrompt, systemPrompt)
 		}
 	} else {
-		aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+		aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 	}
 	if err != nil {
 		s.log.Warnw("AI generation failed, using fallback", "error", err)
@@ -255,7 +265,7 @@ func (s *FramePromptService) generateFirstFrame(sb models.Storyboard, scene *mod
 }
 
 // generateKeyFrame 生成关键帧提示词
-func (s *FramePromptService) generateKeyFrame(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string) *SingleFramePrompt {
+func (s *FramePromptService) generateKeyFrame(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string, apiKey string) *SingleFramePrompt {
 	// 构建上下文信息
 	contextInfo := s.buildStoryboardContext(sb, scene)
 
@@ -267,15 +277,15 @@ func (s *FramePromptService) generateKeyFrame(sb models.Storyboard, scene *model
 	var aiResponse string
 	var err error
 	if model != "" {
-		client, getErr := s.aiService.GetAIClientForModel("text", model)
+		client, getErr := s.aiService.GetAIClientForModelWithAPIKey("text", model, apiKey)
 		if getErr != nil {
 			s.log.Warnw("Failed to get client for specified model, using default", "model", model, "error", getErr)
-			aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+			aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 		} else {
 			aiResponse, err = client.GenerateText(userPrompt, systemPrompt)
 		}
 	} else {
-		aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+		aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 	}
 	if err != nil {
 		s.log.Warnw("AI generation failed, using fallback", "error", err)
@@ -302,7 +312,7 @@ func (s *FramePromptService) generateKeyFrame(sb models.Storyboard, scene *model
 }
 
 // generateLastFrame 生成尾帧提示词
-func (s *FramePromptService) generateLastFrame(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string) *SingleFramePrompt {
+func (s *FramePromptService) generateLastFrame(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string, apiKey string) *SingleFramePrompt {
 	// 构建上下文信息
 	contextInfo := s.buildStoryboardContext(sb, scene)
 
@@ -314,15 +324,15 @@ func (s *FramePromptService) generateLastFrame(sb models.Storyboard, scene *mode
 	var aiResponse string
 	var err error
 	if model != "" {
-		client, getErr := s.aiService.GetAIClientForModel("text", model)
+		client, getErr := s.aiService.GetAIClientForModelWithAPIKey("text", model, apiKey)
 		if getErr != nil {
 			s.log.Warnw("Failed to get client for specified model, using default", "model", model, "error", getErr)
-			aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+			aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 		} else {
 			aiResponse, err = client.GenerateText(userPrompt, systemPrompt)
 		}
 	} else {
-		aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+		aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 	}
 	if err != nil {
 		s.log.Warnw("AI generation failed, using fallback", "error", err)
@@ -349,27 +359,27 @@ func (s *FramePromptService) generateLastFrame(sb models.Storyboard, scene *mode
 }
 
 // generatePanelFrames 生成分镜板提示词（多格组合）
-func (s *FramePromptService) generatePanelFrames(sb models.Storyboard, scene *models.Scene, count int, dramaStyle string, model string) *MultiFramePrompt {
+func (s *FramePromptService) generatePanelFrames(sb models.Storyboard, scene *models.Scene, count int, dramaStyle string, model string, apiKey string) *MultiFramePrompt {
 	layout := fmt.Sprintf("horizontal_%d", count)
 
 	frames := make([]SingleFramePrompt, count)
 
 	// 固定生成：首帧 -> 关键帧 -> 尾帧
 	if count == 3 {
-		frames[0] = *s.generateFirstFrame(sb, scene, dramaStyle, model)
+		frames[0] = *s.generateFirstFrame(sb, scene, dramaStyle, model, apiKey)
 		frames[0].Description = "第1格：初始状态"
 
-		frames[1] = *s.generateKeyFrame(sb, scene, dramaStyle, model)
+		frames[1] = *s.generateKeyFrame(sb, scene, dramaStyle, model, apiKey)
 		frames[1].Description = "第2格：动作高潮"
 
-		frames[2] = *s.generateLastFrame(sb, scene, dramaStyle, model)
+		frames[2] = *s.generateLastFrame(sb, scene, dramaStyle, model, apiKey)
 		frames[2].Description = "第3格：最终状态"
 	} else if count == 4 {
 		// 4格：首帧 -> 中间帧1 -> 中间帧2 -> 尾帧
-		frames[0] = *s.generateFirstFrame(sb, scene, dramaStyle, model)
-		frames[1] = *s.generateKeyFrame(sb, scene, dramaStyle, model)
-		frames[2] = *s.generateKeyFrame(sb, scene, dramaStyle, model)
-		frames[3] = *s.generateLastFrame(sb, scene, dramaStyle, model)
+		frames[0] = *s.generateFirstFrame(sb, scene, dramaStyle, model, apiKey)
+		frames[1] = *s.generateKeyFrame(sb, scene, dramaStyle, model, apiKey)
+		frames[2] = *s.generateKeyFrame(sb, scene, dramaStyle, model, apiKey)
+		frames[3] = *s.generateLastFrame(sb, scene, dramaStyle, model, apiKey)
 	}
 
 	return &MultiFramePrompt{
@@ -379,7 +389,7 @@ func (s *FramePromptService) generatePanelFrames(sb models.Storyboard, scene *mo
 }
 
 // generateActionSequence 生成动作序列提示词（3x3宫格）
-func (s *FramePromptService) generateActionSequence(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string) *MultiFramePrompt {
+func (s *FramePromptService) generateActionSequence(sb models.Storyboard, scene *models.Scene, dramaStyle string, model string, apiKey string) *MultiFramePrompt {
 	// 构建上下文信息
 	contextInfo := s.buildStoryboardContext(sb, scene)
 
@@ -391,15 +401,15 @@ func (s *FramePromptService) generateActionSequence(sb models.Storyboard, scene 
 	var aiResponse string
 	var err error
 	if model != "" {
-		client, getErr := s.aiService.GetAIClientForModel("text", model)
+		client, getErr := s.aiService.GetAIClientForModelWithAPIKey("text", model, apiKey)
 		if getErr != nil {
 			s.log.Warnw("Failed to get client for specified model, using default", "model", model, "error", getErr)
-			aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+			aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 		} else {
 			aiResponse, err = client.GenerateText(userPrompt, systemPrompt)
 		}
 	} else {
-		aiResponse, err = s.aiService.GenerateText(userPrompt, systemPrompt)
+		aiResponse, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt)
 	}
 
 	if err != nil {

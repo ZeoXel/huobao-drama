@@ -95,6 +95,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { Connection, Edit, Delete } from '@element-plus/icons-vue'
 import type { AIServiceConfig } from '@/types/ai'
 

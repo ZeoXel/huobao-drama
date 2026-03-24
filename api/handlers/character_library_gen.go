@@ -17,7 +17,7 @@ func (h *CharacterLibraryHandler) GenerateCharacterImage(c *gin.Context) {
 	}
 	c.ShouldBindJSON(&req)
 
-	imageGen, err := h.libraryService.GenerateCharacterImage(characterID, h.imageService, req.Model, req.Style)
+	imageGen, err := h.libraryService.GenerateCharacterImage(currentUserID(c), currentAPIKey(c), characterID, h.imageService, req.Model, req.Style)
 	if err != nil {
 		if err.Error() == "character not found" {
 			response.NotFound(c, "角色不存在")

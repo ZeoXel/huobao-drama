@@ -61,7 +61,8 @@ type GenerateStoryboardResult struct {
 	Total       int          `json:"total"`
 }
 
-func (s *StoryboardService) GenerateStoryboard(episodeID string, model string) (string, error) {
+func (s *StoryboardService) GenerateStoryboard(userID string, apiKey string, episodeID string, model string) (string, error) {
+	userID = normalizeUserID(userID)
 	// 从数据库获取剧集信息
 	var episode struct {
 		ID            string
@@ -73,7 +74,7 @@ func (s *StoryboardService) GenerateStoryboard(episodeID string, model string) (
 	err := s.db.Table("episodes").
 		Select("episodes.id, episodes.script_content, episodes.description, episodes.drama_id").
 		Joins("INNER JOIN dramas ON dramas.id = episodes.drama_id").
-		Where("episodes.id = ?", episodeID).
+		Where("episodes.id = ? AND dramas.user_id = ?", episodeID, userID).
 		First(&episode).Error
 
 	if err != nil {
@@ -148,8 +149,6 @@ func (s *StoryboardService) GenerateStoryboard(episodeID string, model string) (
 %s
 %s
 
-%s
-
 【剧本原文】
 %s
 
@@ -212,7 +211,7 @@ func (s *StoryboardService) GenerateStoryboard(episodeID string, model string) (
       "action": "陈峥缓缓转身，目光与身后的李芳对视，李芳手握手电筒，光束在两人之间晃动，眼神中透露疑惑和警惕",
       "dialogue": "陈峥：\"我们被耍了，这里根本没有我们要找的东西。\" 李芳：\"现在怎么办？我们的时间不多了。\"",
       "result": "两人站在昏暗中陷入沉思，手电筒光束照在地面形成圆形光斑，背景传来微弱的金属摩擦声，气氛紧张凝重",
-      "atmosphere": "低调光线·暗部占画面70%，侧面硬光勾勒人物轮廓，冷暖光对比强烈，海风吹过产生呼啸声，营造紧迫感",
+      "atmosphere": "低调光线·暗部占画面70%%，侧面硬光勾勒人物轮廓，冷暖光对比强烈，海风吹过产生呼啸声，营造紧迫感",
       "emotion": "紧张感↑↑·警惕↑↑（悬置）",
       "duration": 7,
       "bgm_prompt": "紧张感逐渐升级的音效，低频持续音",
@@ -338,14 +337,15 @@ func (s *StoryboardService) GenerateStoryboard(episodeID string, model string) (
 		"scenes", sceneList)
 
 	// 启动后台goroutine处理AI调用和后续逻辑
-	go s.processStoryboardGeneration(task.ID, episodeID, model, prompt)
+	go s.processStoryboardGeneration(task.ID, userID, apiKey, episodeID, model, prompt)
 
 	// 立即返回任务ID
 	return task.ID, nil
 }
 
 // processStoryboardGeneration 后台处理故事板生成
-func (s *StoryboardService) processStoryboardGeneration(taskID, episodeID, model, prompt string) {
+func (s *StoryboardService) processStoryboardGeneration(taskID, userID, apiKey, episodeID, model, prompt string) {
+	userID = normalizeUserID(userID)
 	// 更新任务状态为处理中
 	if err := s.taskService.UpdateTaskStatus(taskID, "processing", 10, "开始生成分镜头..."); err != nil {
 		s.log.Errorw("Failed to update task status", "error", err, "task_id", taskID)
@@ -360,15 +360,15 @@ func (s *StoryboardService) processStoryboardGeneration(taskID, episodeID, model
 	var err error
 	if model != "" {
 		s.log.Infow("Using specified model for storyboard generation", "model", model, "task_id", taskID)
-		client, getErr := s.aiService.GetAIClientForModel("text", model)
+		client, getErr := s.aiService.GetAIClientForModelWithAPIKey("text", model, apiKey)
 		if getErr != nil {
 			s.log.Warnw("Failed to get client for specified model, using default", "model", model, "error", getErr, "task_id", taskID)
-			text, err = s.aiService.GenerateText(prompt, "", ai.WithMaxTokens(16000))
+			text, err = s.aiService.GenerateTextWithAPIKey(apiKey, prompt, "", ai.WithMaxTokens(16000))
 		} else {
 			text, err = client.GenerateText(prompt, "", ai.WithMaxTokens(16000))
 		}
 	} else {
-		text, err = s.aiService.GenerateText(prompt, "", ai.WithMaxTokens(16000))
+		text, err = s.aiService.GenerateTextWithAPIKey(apiKey, prompt, "", ai.WithMaxTokens(16000))
 	}
 
 	if err != nil {

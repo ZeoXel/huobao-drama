@@ -31,7 +31,7 @@ func (h *VideoGenerationHandler) GenerateVideo(c *gin.Context) {
 		return
 	}
 
-	videoGen, err := h.videoService.GenerateVideo(&req)
+	videoGen, err := h.videoService.GenerateVideo(currentUserID(c), currentAPIKey(c), &req)
 	if err != nil {
 		h.log.Errorw("Failed to generate video", "error", err)
 		response.InternalError(c, err.Error())
@@ -49,7 +49,7 @@ func (h *VideoGenerationHandler) GenerateVideoFromImage(c *gin.Context) {
 		return
 	}
 
-	videoGen, err := h.videoService.GenerateVideoFromImage(uint(imageGenID))
+	videoGen, err := h.videoService.GenerateVideoFromImage(currentUserID(c), currentAPIKey(c), uint(imageGenID))
 	if err != nil {
 		h.log.Errorw("Failed to generate video from image", "error", err)
 		response.InternalError(c, err.Error())
@@ -63,7 +63,7 @@ func (h *VideoGenerationHandler) BatchGenerateForEpisode(c *gin.Context) {
 
 	episodeID := c.Param("episode_id")
 
-	videos, err := h.videoService.BatchGenerateVideosForEpisode(episodeID)
+	videos, err := h.videoService.BatchGenerateVideosForEpisode(currentUserID(c), currentAPIKey(c), episodeID)
 	if err != nil {
 		h.log.Errorw("Failed to batch generate videos", "error", err)
 		response.InternalError(c, err.Error())
@@ -81,7 +81,7 @@ func (h *VideoGenerationHandler) GetVideoGeneration(c *gin.Context) {
 		return
 	}
 
-	videoGen, err := h.videoService.GetVideoGeneration(uint(videoGenID))
+	videoGen, err := h.videoService.GetVideoGeneration(currentUserID(c), uint(videoGenID))
 	if err != nil {
 		response.NotFound(c, "视频生成记录不存在")
 		return
@@ -120,7 +120,7 @@ func (h *VideoGenerationHandler) ListVideoGenerations(c *gin.Context) {
 
 	// 计算offset：(page - 1) * pageSize
 	offset := (page - 1) * pageSize
-	videos, total, err := h.videoService.ListVideoGenerations(dramaIDUint, storyboardID, status, pageSize, offset)
+	videos, total, err := h.videoService.ListVideoGenerations(currentUserID(c), dramaIDUint, storyboardID, status, pageSize, offset)
 
 	if err != nil {
 		h.log.Errorw("Failed to list videos", "error", err)
@@ -139,7 +139,7 @@ func (h *VideoGenerationHandler) DeleteVideoGeneration(c *gin.Context) {
 		return
 	}
 
-	if err := h.videoService.DeleteVideoGeneration(uint(videoGenID)); err != nil {
+	if err := h.videoService.DeleteVideoGeneration(currentUserID(c), uint(videoGenID)); err != nil {
 		h.log.Errorw("Failed to delete video", "error", err)
 		response.InternalError(c, err.Error())
 		return

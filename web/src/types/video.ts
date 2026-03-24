@@ -1,9 +1,9 @@
 export interface VideoGeneration {
-  id: number
-  storyboard_id?: number
+  id: number | string
+  storyboard_id?: number | string
   scene_id?: string  // 已废弃，保留用于兼容
   drama_id: string
-  image_gen_id?: number
+  image_gen_id?: number | string
   provider: string
   prompt: string
   model?: string
@@ -34,10 +34,10 @@ export type VideoStatus = 'pending' | 'processing' | 'completed' | 'failed'
 export type VideoProvider = 'runway' | 'pika' | 'doubao' | 'openai'
 
 export interface GenerateVideoRequest {
-  storyboard_id?: number
+  storyboard_id?: number | string
   scene_id?: string  // 已废弃，保留用于兼容
   drama_id: string
-  image_gen_id?: number
+  image_gen_id?: number | string
   image_url?: string
   prompt: string
   provider?: string

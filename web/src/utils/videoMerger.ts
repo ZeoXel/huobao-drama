@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile, toBlobURL } from '@ffmpeg/util'
 

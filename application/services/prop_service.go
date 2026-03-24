@@ -60,9 +60,12 @@ func (s *PropService) DeleteProp(id uint) error {
 }
 
 // ExtractPropsFromScript 从剧本提取道具（异步）
-func (s *PropService) ExtractPropsFromScript(episodeID uint) (string, error) {
+func (s *PropService) ExtractPropsFromScript(userID string, apiKey string, episodeID uint) (string, error) {
+	userID = normalizeUserID(userID)
 	var episode models.Episode
-	if err := s.db.First(&episode, episodeID).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("episodes.id = ? AND dramas.user_id = ?", episodeID, userID).
+		First(&episode).Error; err != nil {
 		return "", fmt.Errorf("episode not found: %w", err)
 	}
 
@@ -71,12 +74,12 @@ func (s *PropService) ExtractPropsFromScript(episodeID uint) (string, error) {
 		return "", err
 	}
 
-	go s.processPropExtraction(task.ID, episode)
+	go s.processPropExtraction(task.ID, episode, apiKey)
 
 	return task.ID, nil
 }
 
-func (s *PropService) processPropExtraction(taskID string, episode models.Episode) {
+func (s *PropService) processPropExtraction(taskID string, episode models.Episode, apiKey string) {
 	s.taskService.UpdateTaskStatus(taskID, "processing", 0, "正在分析剧本...")
 
 	script := ""
@@ -93,7 +96,7 @@ func (s *PropService) processPropExtraction(taskID string, episode models.Episod
 	promptTemplate := s.promptI18n.GetPropExtractionPrompt(drama.Style)
 	prompt := fmt.Sprintf(promptTemplate, script)
 
-	response, err := s.aiService.GenerateText(prompt, "", ai.WithMaxTokens(2000))
+	response, err := s.aiService.GenerateTextWithAPIKey(apiKey, prompt, "", ai.WithMaxTokens(2000))
 	if err != nil {
 		s.taskService.UpdateTaskError(taskID, err)
 		return
@@ -145,10 +148,13 @@ func (s *PropService) processPropExtraction(taskID string, episode models.Episod
 // 所以这里实现一个简化的直接生成逻辑，或者扩展 ImageGenerationService。
 // 鉴于时间，我实现一个简化的直接生成并保存图片的方法。
 
-func (s *PropService) GeneratePropImage(propID uint) (string, error) {
+func (s *PropService) GeneratePropImage(userID string, apiKey string, propID uint) (string, error) {
+	userID = normalizeUserID(userID)
 	// 1. 获取道具信息
 	var prop models.Prop
-	if err := s.db.First(&prop, propID).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = props.drama_id").
+		Where("props.id = ? AND dramas.user_id = ?", propID, userID).
+		First(&prop).Error; err != nil {
 		return "", err
 	}
 
@@ -162,12 +168,18 @@ func (s *PropService) GeneratePropImage(propID uint) (string, error) {
 		return "", err
 	}
 
-	go s.processPropImageGeneration(task.ID, prop)
+	go s.processPropImageGeneration(task.ID, prop, apiKey)
 	return task.ID, nil
 }
 
-func (s *PropService) processPropImageGeneration(taskID string, prop models.Prop) {
+func (s *PropService) processPropImageGeneration(taskID string, prop models.Prop, apiKey string) {
 	s.taskService.UpdateTaskStatus(taskID, "processing", 0, "正在生成图片...")
+
+	var drama models.Drama
+	if err := s.db.Where("id = ?", prop.DramaID).First(&drama).Error; err != nil {
+		s.taskService.UpdateTaskError(taskID, fmt.Errorf("加载项目信息失败: %w", err))
+		return
+	}
 
 	// 准备生成参数
 	imageStyle := "Modern Japanese anime style"
@@ -185,7 +197,7 @@ func (s *PropService) processPropImageGeneration(taskID string, prop models.Prop
 	}
 
 	// 调用 ImageGenerationService
-	imageGen, err := s.imageGenerationService.GenerateImage(req)
+	imageGen, err := s.imageGenerationService.GenerateImage(drama.UserID, apiKey, req)
 	if err != nil {
 		s.taskService.UpdateTaskError(taskID, err)
 		return

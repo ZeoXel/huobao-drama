@@ -31,7 +31,7 @@ func (h *ScriptGenerationHandler) GenerateCharacters(c *gin.Context) {
 	}
 
 	// 直接调用服务层的异步方法，该方法会创建任务并返回任务ID
-	taskID, err := h.scriptService.GenerateCharacters(&req)
+	taskID, err := h.scriptService.GenerateCharacters(currentUserID(c), currentAPIKey(c), &req)
 	if err != nil {
 		h.log.Errorw("Failed to generate characters", "error", err, "drama_id", req.DramaID)
 		response.InternalError(c, err.Error())

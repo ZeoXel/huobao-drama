@@ -3,6 +3,8 @@ package services
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/drama-generator/backend/domain/models"
 	"github.com/drama-generator/backend/pkg/ai"
@@ -332,6 +334,14 @@ func (s *AIService) GetDefaultConfig(serviceType string) (*models.AIServiceConfi
 	return &config, nil
 }
 
+func (s *AIService) GetDefaultConfigWithAPIKey(serviceType string, apiKey string) (*models.AIServiceConfig, error) {
+	config, err := s.GetDefaultConfig(serviceType)
+	if err != nil {
+		return nil, err
+	}
+	return s.applyGatewayOverride(config, apiKey), nil
+}
+
 // GetConfigForModel 根据服务类型和模型名称获取优先级最高的激活配置
 func (s *AIService) GetConfigForModel(serviceType string, modelName string) (*models.AIServiceConfig, error) {
 	var configs []models.AIServiceConfig
@@ -355,8 +365,36 @@ func (s *AIService) GetConfigForModel(serviceType string, modelName string) (*mo
 	return nil, errors.New("no active config found for model: " + modelName)
 }
 
+func (s *AIService) GetConfigForModelWithAPIKey(serviceType string, modelName string, apiKey string) (*models.AIServiceConfig, error) {
+	config, err := s.GetConfigForModel(serviceType, modelName)
+	if err != nil {
+		return nil, err
+	}
+	return s.applyGatewayOverride(config, apiKey), nil
+}
+
+func (s *AIService) applyGatewayOverride(config *models.AIServiceConfig, apiKey string) *models.AIServiceConfig {
+	if config == nil {
+		return nil
+	}
+	cfgCopy := *config
+	trimmedAPIKey := strings.TrimSpace(apiKey)
+	if trimmedAPIKey == "" {
+		return &cfgCopy
+	}
+	cfgCopy.APIKey = trimmedAPIKey
+	if gatewayURL := strings.TrimSpace(os.Getenv("GATEWAY_URL")); gatewayURL != "" {
+		cfgCopy.BaseURL = gatewayURL
+	}
+	return &cfgCopy
+}
+
 func (s *AIService) GetAIClient(serviceType string) (ai.AIClient, error) {
-	config, err := s.GetDefaultConfig(serviceType)
+	return s.GetAIClientWithAPIKey(serviceType, "")
+}
+
+func (s *AIService) GetAIClientWithAPIKey(serviceType string, apiKey string) (ai.AIClient, error) {
+	config, err := s.GetDefaultConfigWithAPIKey(serviceType, apiKey)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +428,11 @@ func (s *AIService) GetAIClient(serviceType string) (ai.AIClient, error) {
 
 // GetAIClientForModel 根据服务类型和模型名称获取对应的AI客户端
 func (s *AIService) GetAIClientForModel(serviceType string, modelName string) (ai.AIClient, error) {
-	config, err := s.GetConfigForModel(serviceType, modelName)
+	return s.GetAIClientForModelWithAPIKey(serviceType, modelName, "")
+}
+
+func (s *AIService) GetAIClientForModelWithAPIKey(serviceType string, modelName string, apiKey string) (ai.AIClient, error) {
+	config, err := s.GetConfigForModelWithAPIKey(serviceType, modelName, apiKey)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +459,11 @@ func (s *AIService) GetAIClientForModel(serviceType string, modelName string) (a
 }
 
 func (s *AIService) GenerateText(prompt string, systemPrompt string, options ...func(*ai.ChatCompletionRequest)) (string, error) {
-	client, err := s.GetAIClient("text")
+	return s.GenerateTextWithAPIKey("", prompt, systemPrompt, options...)
+}
+
+func (s *AIService) GenerateTextWithAPIKey(apiKey string, prompt string, systemPrompt string, options ...func(*ai.ChatCompletionRequest)) (string, error) {
+	client, err := s.GetAIClientWithAPIKey("text", apiKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to get AI client: %w", err)
 	}
@@ -426,7 +472,11 @@ func (s *AIService) GenerateText(prompt string, systemPrompt string, options ...
 }
 
 func (s *AIService) GenerateImage(prompt string, size string, n int) ([]string, error) {
-	client, err := s.GetAIClient("image")
+	return s.GenerateImageWithAPIKey("", prompt, size, n)
+}
+
+func (s *AIService) GenerateImageWithAPIKey(apiKey string, prompt string, size string, n int) ([]string, error) {
+	client, err := s.GetAIClientWithAPIKey("image", apiKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get AI client for image: %w", err)
 	}

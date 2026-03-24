@@ -39,7 +39,7 @@ func (h *StoryboardHandler) GenerateStoryboard(c *gin.Context) {
 	}
 
 	// 调用生成服务，该服务已经是异步的，会返回任务ID
-	taskID, err := h.storyboardService.GenerateStoryboard(episodeID, req.Model)
+	taskID, err := h.storyboardService.GenerateStoryboard(currentUserID(c), currentAPIKey(c), episodeID, req.Model)
 	if err != nil {
 		h.log.Errorw("Failed to generate storyboard", "error", err, "episode_id", episodeID)
 		response.InternalError(c, err.Error())

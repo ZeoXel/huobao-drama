@@ -42,7 +42,7 @@ func (h *CharacterLibraryHandler) ListLibraryItems(c *gin.Context) {
 		query.PageSize = 20
 	}
 
-	items, total, err := h.libraryService.ListLibraryItems(&query)
+	items, total, err := h.libraryService.ListLibraryItems(currentUserID(c), &query)
 	if err != nil {
 		h.log.Errorw("Failed to list library items", "error", err)
 		response.InternalError(c, "获取角色库失败")
@@ -61,7 +61,7 @@ func (h *CharacterLibraryHandler) CreateLibraryItem(c *gin.Context) {
 		return
 	}
 
-	item, err := h.libraryService.CreateLibraryItem(&req)
+	item, err := h.libraryService.CreateLibraryItem(currentUserID(c), &req)
 	if err != nil {
 		h.log.Errorw("Failed to create library item", "error", err)
 		response.InternalError(c, "添加到角色库失败")
@@ -76,7 +76,7 @@ func (h *CharacterLibraryHandler) GetLibraryItem(c *gin.Context) {
 
 	itemID := c.Param("id")
 
-	item, err := h.libraryService.GetLibraryItem(itemID)
+	item, err := h.libraryService.GetLibraryItem(currentUserID(c), itemID)
 	if err != nil {
 		if err.Error() == "library item not found" {
 			response.NotFound(c, "角色库项不存在")
@@ -95,7 +95,7 @@ func (h *CharacterLibraryHandler) DeleteLibraryItem(c *gin.Context) {
 
 	itemID := c.Param("id")
 
-	if err := h.libraryService.DeleteLibraryItem(itemID); err != nil {
+	if err := h.libraryService.DeleteLibraryItem(currentUserID(c), itemID); err != nil {
 		if err.Error() == "library item not found" {
 			response.NotFound(c, "角色库项不存在")
 			return
@@ -125,7 +125,7 @@ func (h *CharacterLibraryHandler) UploadCharacterImage(c *gin.Context) {
 		return
 	}
 
-	if err := h.libraryService.UploadCharacterImage(characterID, req.ImageURL); err != nil {
+	if err := h.libraryService.UploadCharacterImage(currentUserID(c), characterID, req.ImageURL); err != nil {
 		if err.Error() == "character not found" {
 			response.NotFound(c, "角色不存在")
 			return
@@ -156,7 +156,7 @@ func (h *CharacterLibraryHandler) ApplyLibraryItemToCharacter(c *gin.Context) {
 		return
 	}
 
-	if err := h.libraryService.ApplyLibraryItemToCharacter(characterID, req.LibraryItemID); err != nil {
+	if err := h.libraryService.ApplyLibraryItemToCharacter(currentUserID(c), characterID, req.LibraryItemID); err != nil {
 		if err.Error() == "library item not found" {
 			response.NotFound(c, "角色库项不存在")
 			return
@@ -191,7 +191,7 @@ func (h *CharacterLibraryHandler) AddCharacterToLibrary(c *gin.Context) {
 		req.Category = nil
 	}
 
-	item, err := h.libraryService.AddCharacterToLibrary(characterID, req.Category)
+	item, err := h.libraryService.AddCharacterToLibrary(currentUserID(c), characterID, req.Category)
 	if err != nil {
 		if err.Error() == "character not found" {
 			response.NotFound(c, "角色不存在")
@@ -224,7 +224,7 @@ func (h *CharacterLibraryHandler) UpdateCharacter(c *gin.Context) {
 		return
 	}
 
-	if err := h.libraryService.UpdateCharacter(characterID, &req); err != nil {
+	if err := h.libraryService.UpdateCharacter(currentUserID(c), characterID, &req); err != nil {
 		if err.Error() == "character not found" {
 			response.NotFound(c, "角色不存在")
 			return
@@ -251,7 +251,7 @@ func (h *CharacterLibraryHandler) DeleteCharacter(c *gin.Context) {
 		return
 	}
 
-	if err := h.libraryService.DeleteCharacter(uint(characterID)); err != nil {
+	if err := h.libraryService.DeleteCharacter(currentUserID(c), uint(characterID)); err != nil {
 		h.log.Errorw("Failed to delete character", "error", err, "id", characterID)
 		if err.Error() == "character not found" {
 			response.NotFound(c, "角色不存在")
@@ -277,7 +277,7 @@ func (h *CharacterLibraryHandler) ExtractCharacters(c *gin.Context) {
 		return
 	}
 
-	taskID, err := h.libraryService.ExtractCharactersFromScript(uint(episodeID))
+	taskID, err := h.libraryService.ExtractCharactersFromScript(currentUserID(c), currentAPIKey(c), uint(episodeID))
 	if err != nil {
 		h.log.Errorw("Failed to extract characters", "error", err)
 		response.InternalError(c, err.Error())

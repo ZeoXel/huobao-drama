@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
+import { watch } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -75,6 +77,30 @@ const router = createRouter({
   routes
 })
 
-// 开源版本 - 无需认证
+router.beforeEach(async () => {
+  const auth = useAuthStore()
+  if (auth.ready) {
+    return true
+  }
+
+  await new Promise<void>((resolve) => {
+    const stop = watch(
+      () => auth.ready,
+      (ready) => {
+        if (ready) {
+          stop()
+          resolve()
+        }
+      }
+    )
+
+    window.setTimeout(() => {
+      stop()
+      resolve()
+    }, 5000)
+  })
+
+  return true
+})
 
 export default router

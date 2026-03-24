@@ -1,6 +1,7 @@
 import type { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
 
 interface CustomAxiosInstance extends Omit<AxiosInstance, 'get' | 'post' | 'put' | 'patch' | 'delete'> {
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
@@ -18,9 +19,22 @@ const request = axios.create({
   }
 }) as CustomAxiosInstance
 
-// 开源版本 - 无需认证token
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    try {
+      const auth = useAuthStore()
+      if (auth.token) {
+        config.headers['Authorization'] = `Bearer ${auth.token}`
+      }
+      if (auth.apiKey) {
+        config.headers['X-API-Key'] = auth.apiKey
+      }
+      if (auth.userId) {
+        config.headers['X-User-ID'] = auth.userId
+      }
+    } catch {
+      // Store may be unavailable during early bootstrap; skip auth headers.
+    }
     return config
   },
   (error: AxiosError) => {

@@ -9,6 +9,7 @@ import (
 	"github.com/drama-generator/backend/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"os"
 )
 
 func SetupRouter(cfg *config.Config, db *gorm.DB, log *logger.Logger, localStorage interface{}) *gin.Engine {
@@ -58,6 +59,12 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, log *logger.Logger, localStora
 
 	api := r.Group("/api/v1")
 	{
+		nextAuthSecret := cfg.Auth.NextAuthSecret
+		if nextAuthSecret == "" {
+			nextAuthSecret = os.Getenv("NEXTAUTH_SECRET")
+		}
+
+		api.Use(middlewares2.AuthMiddleware(nextAuthSecret))
 		api.Use(middlewares2.RateLimitMiddleware())
 
 		dramas := api.Group("/dramas")

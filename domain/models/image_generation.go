@@ -8,6 +8,7 @@ import (
 
 type ImageGeneration struct {
 	ID              uint                  `gorm:"primarykey" json:"id"`
+	UserID          string                `gorm:"type:varchar(64);index;not null;default:'standalone'" json:"user_id"`
 	StoryboardID    *uint                 `gorm:"index" json:"storyboard_id,omitempty"`
 	DramaID         uint                  `gorm:"not null;index" json:"drama_id"`
 	SceneID         *uint                 `gorm:"index" json:"scene_id,omitempty"`

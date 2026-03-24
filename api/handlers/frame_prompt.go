@@ -43,7 +43,7 @@ func (h *FramePromptHandler) GenerateFramePrompt(c *gin.Context) {
 	}
 
 	// 直接调用服务层的异步方法，该方法会创建任务并返回任务ID
-	taskID, err := h.framePromptService.GenerateFramePrompt(serviceReq, req.Model)
+	taskID, err := h.framePromptService.GenerateFramePrompt(currentUserID(c), currentAPIKey(c), serviceReq, req.Model)
 	if err != nil {
 		h.log.Errorw("Failed to generate frame prompt", "error", err)
 		response.InternalError(c, err.Error())

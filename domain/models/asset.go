@@ -8,6 +8,7 @@ import (
 
 type Asset struct {
 	ID        uint           `gorm:"primarykey" json:"id"`
+	UserID    string         `gorm:"type:varchar(64);index;not null;default:'standalone'" json:"user_id"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

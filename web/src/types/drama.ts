@@ -26,7 +26,7 @@ export interface Drama {
 export type DramaStatus = 'draft' | 'planning' | 'production' | 'completed' | 'archived' | 'generating' | 'error'
 
 export interface Character {
-  id: number
+  id: number | string
   drama_id: string
   name: string
   role?: string
@@ -49,7 +49,7 @@ export interface Character {
 export interface Episode {
   id: string
   drama_id: string
-  episode_number: number
+  episode_number: number | string
   title: string
   content: string
   description?: string
@@ -72,9 +72,9 @@ export interface Episode {
 }
 
 export interface Storyboard {
-  id: string
-  episode_id: string
-  storyboard_number: number
+  id: string | number
+  episode_id: string | number
+  storyboard_number: number | string
   title?: string
   description?: string
   location?: string
@@ -89,7 +89,9 @@ export interface Storyboard {
   image_url?: string
   video_url?: string
   composed_image?: string
-  scene_id?: string
+  composed_url?: string
+  background_id?: string | number | null
+  scene_id?: string | number | null
   scene?: Scene
   created_at: string
   updated_at: string
@@ -97,8 +99,8 @@ export interface Storyboard {
 }
 
 export interface Scene {
-  id: string
-  drama_id: string
+  id: string | number
+  drama_id: string | number
   location: string
   time: string
   prompt: string
@@ -109,7 +111,7 @@ export interface Scene {
   image_url?: string
   local_path?: string
   video_url?: string
-  status: string
+  status?: string
   image_generation_status?: string
   image_generation_error?: string
   created_at: string

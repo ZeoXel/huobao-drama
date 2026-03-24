@@ -25,7 +25,7 @@ func (h *CharacterLibraryHandler) BatchGenerateCharacterImages(c *gin.Context) {
 	}
 
 	// 异步批量生成
-	go h.libraryService.BatchGenerateCharacterImages(req.CharacterIDs, h.imageService, req.Model)
+	go h.libraryService.BatchGenerateCharacterImages(currentUserID(c), currentAPIKey(c), req.CharacterIDs, h.imageService, req.Model)
 
 	response.Success(c, gin.H{
 		"message": "批量生成任务已提交",

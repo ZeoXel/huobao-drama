@@ -52,11 +52,12 @@ type CharacterLibraryQuery struct {
 }
 
 // ListLibraryItems 获取用户角色库列表
-func (s *CharacterLibraryService) ListLibraryItems(query *CharacterLibraryQuery) ([]models.CharacterLibrary, int64, error) {
+func (s *CharacterLibraryService) ListLibraryItems(userID string, query *CharacterLibraryQuery) ([]models.CharacterLibrary, int64, error) {
+	userID = normalizeUserID(userID)
 	var items []models.CharacterLibrary
 	var total int64
 
-	db := s.db.Model(&models.CharacterLibrary{})
+	db := s.db.Model(&models.CharacterLibrary{}).Where("user_id = ?", userID)
 
 	// 筛选条件
 	if query.Category != "" {
@@ -93,13 +94,15 @@ func (s *CharacterLibraryService) ListLibraryItems(query *CharacterLibraryQuery)
 }
 
 // CreateLibraryItem 添加到角色库
-func (s *CharacterLibraryService) CreateLibraryItem(req *CreateLibraryItemRequest) (*models.CharacterLibrary, error) {
+func (s *CharacterLibraryService) CreateLibraryItem(userID string, req *CreateLibraryItemRequest) (*models.CharacterLibrary, error) {
+	userID = normalizeUserID(userID)
 	sourceType := req.SourceType
 	if sourceType == "" {
 		sourceType = "generated"
 	}
 
 	item := &models.CharacterLibrary{
+		UserID:      userID,
 		Name:        req.Name,
 		Category:    req.Category,
 		ImageURL:    req.ImageURL,
@@ -119,9 +122,10 @@ func (s *CharacterLibraryService) CreateLibraryItem(req *CreateLibraryItemReques
 }
 
 // GetLibraryItem 获取角色库项
-func (s *CharacterLibraryService) GetLibraryItem(itemID string) (*models.CharacterLibrary, error) {
+func (s *CharacterLibraryService) GetLibraryItem(userID string, itemID string) (*models.CharacterLibrary, error) {
+	userID = normalizeUserID(userID)
 	var item models.CharacterLibrary
-	err := s.db.Where("id = ? ", itemID).First(&item).Error
+	err := s.db.Where("id = ? AND user_id = ?", itemID, userID).First(&item).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -135,8 +139,9 @@ func (s *CharacterLibraryService) GetLibraryItem(itemID string) (*models.Charact
 }
 
 // DeleteLibraryItem 删除角色库项
-func (s *CharacterLibraryService) DeleteLibraryItem(itemID string) error {
-	result := s.db.Where("id = ? ", itemID).Delete(&models.CharacterLibrary{})
+func (s *CharacterLibraryService) DeleteLibraryItem(userID string, itemID string) error {
+	userID = normalizeUserID(userID)
+	result := s.db.Where("id = ? AND user_id = ?", itemID, userID).Delete(&models.CharacterLibrary{})
 
 	if result.Error != nil {
 		s.log.Errorw("Failed to delete library item", "error", result.Error)
@@ -152,10 +157,11 @@ func (s *CharacterLibraryService) DeleteLibraryItem(itemID string) error {
 }
 
 // ApplyLibraryItemToCharacter 将角色库形象应用到角色
-func (s *CharacterLibraryService) ApplyLibraryItemToCharacter(characterID string, libraryItemID string) error {
+func (s *CharacterLibraryService) ApplyLibraryItemToCharacter(userID string, characterID string, libraryItemID string) error {
+	userID = normalizeUserID(userID)
 	// 验证角色库项存在且属于该用户
 	var libraryItem models.CharacterLibrary
-	if err := s.db.Where("id = ? ", libraryItemID).First(&libraryItem).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", libraryItemID, userID).First(&libraryItem).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("library item not found")
 		}
@@ -164,7 +170,9 @@ func (s *CharacterLibraryService) ApplyLibraryItemToCharacter(characterID string
 
 	// 查找角色
 	var character models.Character
-	if err := s.db.Where("id = ?", characterID).First(&character).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = characters.drama_id").
+		Where("characters.id = ? AND dramas.user_id = ?", characterID, userID).
+		First(&character).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("character not found")
 		}
@@ -173,7 +181,7 @@ func (s *CharacterLibraryService) ApplyLibraryItemToCharacter(characterID string
 
 	// 查询Drama验证权限
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", character.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", character.DramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("unauthorized")
 		}
@@ -200,10 +208,13 @@ func (s *CharacterLibraryService) ApplyLibraryItemToCharacter(characterID string
 }
 
 // UploadCharacterImage 上传角色图片
-func (s *CharacterLibraryService) UploadCharacterImage(characterID string, imageURL string) error {
+func (s *CharacterLibraryService) UploadCharacterImage(userID string, characterID string, imageURL string) error {
+	userID = normalizeUserID(userID)
 	// 查找角色
 	var character models.Character
-	if err := s.db.Where("id = ?", characterID).First(&character).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = characters.drama_id").
+		Where("characters.id = ? AND dramas.user_id = ?", characterID, userID).
+		First(&character).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("character not found")
 		}
@@ -212,7 +223,7 @@ func (s *CharacterLibraryService) UploadCharacterImage(characterID string, image
 
 	// 查询Drama验证权限
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", character.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", character.DramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("unauthorized")
 		}
@@ -230,10 +241,13 @@ func (s *CharacterLibraryService) UploadCharacterImage(characterID string, image
 }
 
 // AddCharacterToLibrary 将角色添加到角色库
-func (s *CharacterLibraryService) AddCharacterToLibrary(characterID string, category *string) (*models.CharacterLibrary, error) {
+func (s *CharacterLibraryService) AddCharacterToLibrary(userID string, characterID string, category *string) (*models.CharacterLibrary, error) {
+	userID = normalizeUserID(userID)
 	// 查找角色
 	var character models.Character
-	if err := s.db.Where("id = ?", characterID).First(&character).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = characters.drama_id").
+		Where("characters.id = ? AND dramas.user_id = ?", characterID, userID).
+		First(&character).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("character not found")
 		}
@@ -242,7 +256,7 @@ func (s *CharacterLibraryService) AddCharacterToLibrary(characterID string, cate
 
 	// 查询Drama验证权限
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", character.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", character.DramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("unauthorized")
 		}
@@ -256,6 +270,7 @@ func (s *CharacterLibraryService) AddCharacterToLibrary(characterID string, cate
 
 	// 创建角色库项
 	charLibrary := &models.CharacterLibrary{
+		UserID:      userID,
 		Name:        character.Name,
 		ImageURL:    *character.ImageURL,
 		LocalPath:   character.LocalPath,
@@ -273,10 +288,13 @@ func (s *CharacterLibraryService) AddCharacterToLibrary(characterID string, cate
 }
 
 // DeleteCharacter 删除单个角色
-func (s *CharacterLibraryService) DeleteCharacter(characterID uint) error {
+func (s *CharacterLibraryService) DeleteCharacter(userID string, characterID uint) error {
+	userID = normalizeUserID(userID)
 	// 查找角色
 	var character models.Character
-	if err := s.db.Where("id = ?", characterID).First(&character).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = characters.drama_id").
+		Where("characters.id = ? AND dramas.user_id = ?", characterID, userID).
+		First(&character).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("character not found")
 		}
@@ -285,7 +303,7 @@ func (s *CharacterLibraryService) DeleteCharacter(characterID uint) error {
 
 	// 验证权限：检查角色所属的drama是否属于当前用户
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", character.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", character.DramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("unauthorized")
 		}
@@ -303,10 +321,13 @@ func (s *CharacterLibraryService) DeleteCharacter(characterID uint) error {
 }
 
 // GenerateCharacterImage AI生成角色形象
-func (s *CharacterLibraryService) GenerateCharacterImage(characterID string, imageService *ImageGenerationService, modelName string, style string) (*models.ImageGeneration, error) {
+func (s *CharacterLibraryService) GenerateCharacterImage(userID string, apiKey string, characterID string, imageService *ImageGenerationService, modelName string, style string) (*models.ImageGeneration, error) {
+	userID = normalizeUserID(userID)
 	// 查找角色
 	var character models.Character
-	if err := s.db.Where("id = ?", characterID).First(&character).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = characters.drama_id").
+		Where("characters.id = ? AND dramas.user_id = ?", characterID, userID).
+		First(&character).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("character not found")
 		}
@@ -315,7 +336,7 @@ func (s *CharacterLibraryService) GenerateCharacterImage(characterID string, ima
 
 	// 查询Drama验证权限
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", character.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", character.DramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("unauthorized")
 		}
@@ -352,7 +373,7 @@ func (s *CharacterLibraryService) GenerateCharacterImage(characterID string, ima
 		Quality:     "standard",
 	}
 
-	imageGen, err := imageService.GenerateImage(req)
+	imageGen, err := imageService.GenerateImage(userID, apiKey, req)
 	if err != nil {
 		s.log.Errorw("Failed to generate character image", "error", err)
 		return nil, fmt.Errorf("图片生成失败: %w", err)
@@ -413,10 +434,13 @@ type UpdateCharacterRequest struct {
 }
 
 // UpdateCharacter 更新角色信息
-func (s *CharacterLibraryService) UpdateCharacter(characterID string, req *UpdateCharacterRequest) error {
+func (s *CharacterLibraryService) UpdateCharacter(userID string, characterID string, req *UpdateCharacterRequest) error {
+	userID = normalizeUserID(userID)
 	// 查找角色
 	var character models.Character
-	if err := s.db.Where("id = ?", characterID).First(&character).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = characters.drama_id").
+		Where("characters.id = ? AND dramas.user_id = ?", characterID, userID).
+		First(&character).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("character not found")
 		}
@@ -425,7 +449,7 @@ func (s *CharacterLibraryService) UpdateCharacter(characterID string, req *Updat
 
 	// 验证权限：查询角色所属的drama是否属于该用户
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", character.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", character.DramaID, userID).First(&drama).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("unauthorized")
 		}
@@ -472,7 +496,8 @@ func (s *CharacterLibraryService) UpdateCharacter(characterID string, req *Updat
 }
 
 // BatchGenerateCharacterImages 批量生成角色图片（并发执行）
-func (s *CharacterLibraryService) BatchGenerateCharacterImages(characterIDs []string, imageService *ImageGenerationService, modelName string) {
+func (s *CharacterLibraryService) BatchGenerateCharacterImages(userID string, apiKey string, characterIDs []string, imageService *ImageGenerationService, modelName string) {
+	userID = normalizeUserID(userID)
 	s.log.Infow("Starting batch character image generation",
 		"count", len(characterIDs),
 		"model", modelName)
@@ -481,7 +506,7 @@ func (s *CharacterLibraryService) BatchGenerateCharacterImages(characterIDs []st
 	for _, characterID := range characterIDs {
 		// 为每个角色启动单独的 goroutine
 		go func(charID string) {
-			imageGen, err := s.GenerateCharacterImage(charID, imageService, modelName, "") // 批量生成暂不支持自定义风格，使用默认值
+			imageGen, err := s.GenerateCharacterImage(userID, apiKey, charID, imageService, modelName, "") // 批量生成暂不支持自定义风格，使用默认值
 			if err != nil {
 				s.log.Errorw("Failed to generate character image in batch",
 					"character_id", charID,
@@ -500,9 +525,12 @@ func (s *CharacterLibraryService) BatchGenerateCharacterImages(characterIDs []st
 }
 
 // ExtractCharactersFromScript 从分集剧本中提取角色
-func (s *CharacterLibraryService) ExtractCharactersFromScript(episodeID uint) (string, error) {
+func (s *CharacterLibraryService) ExtractCharactersFromScript(userID string, apiKey string, episodeID uint) (string, error) {
+	userID = normalizeUserID(userID)
 	var episode models.Episode
-	if err := s.db.First(&episode, episodeID).Error; err != nil {
+	if err := s.db.Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("episodes.id = ? AND dramas.user_id = ?", episodeID, userID).
+		First(&episode).Error; err != nil {
 		return "", fmt.Errorf("episode not found")
 	}
 
@@ -515,12 +543,12 @@ func (s *CharacterLibraryService) ExtractCharactersFromScript(episodeID uint) (s
 		return "", fmt.Errorf("创建任务失败: %w", err)
 	}
 
-	go s.processCharacterExtraction(task.ID, episode)
+	go s.processCharacterExtraction(task.ID, episode, apiKey)
 
 	return task.ID, nil
 }
 
-func (s *CharacterLibraryService) processCharacterExtraction(taskID string, episode models.Episode) {
+func (s *CharacterLibraryService) processCharacterExtraction(taskID string, episode models.Episode, apiKey string) {
 	s.taskService.UpdateTaskStatus(taskID, "processing", 0, "正在分析剧本...")
 
 	script := ""
@@ -537,7 +565,7 @@ func (s *CharacterLibraryService) processCharacterExtraction(taskID string, epis
 	prompt := s.promptI18n.GetCharacterExtractionPrompt(drama.Style)
 	userPrompt := fmt.Sprintf("【剧本内容】\n%s", script)
 
-	response, err := s.aiService.GenerateText(userPrompt, prompt, ai.WithMaxTokens(3000))
+	response, err := s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, prompt, ai.WithMaxTokens(3000))
 	if err != nil {
 		s.taskService.UpdateTaskError(taskID, err)
 		return

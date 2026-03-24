@@ -18,6 +18,7 @@ const (
 
 type VideoMerge struct {
 	ID          uint             `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID      string           `gorm:"type:varchar(64);index;not null;default:'standalone'" json:"user_id"`
 	EpisodeID   uint             `gorm:"not null;index" json:"episode_id"`
 	DramaID     uint             `gorm:"not null;index" json:"drama_id"`
 	Title       string           `gorm:"type:varchar(200)" json:"title"`

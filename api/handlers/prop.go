@@ -112,7 +112,7 @@ func (h *PropHandler) ExtractProps(c *gin.Context) {
 		return
 	}
 
-	taskID, err := h.propService.ExtractPropsFromScript(uint(episodeID))
+	taskID, err := h.propService.ExtractPropsFromScript(currentUserID(c), currentAPIKey(c), uint(episodeID))
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -130,7 +130,7 @@ func (h *PropHandler) GenerateImage(c *gin.Context) {
 		return
 	}
 
-	taskID, err := h.propService.GeneratePropImage(uint(id))
+	taskID, err := h.propService.GeneratePropImage(currentUserID(c), currentAPIKey(c), uint(id))
 	if err != nil {
 		h.log.Errorw("Failed to generate prop image", "error", err)
 		response.InternalError(c, err.Error())

@@ -41,9 +41,10 @@ type GenerateCharactersRequest struct {
 	Model       string  `json:"model"` // 指定使用的文本模型
 }
 
-func (s *ScriptGenerationService) GenerateCharacters(req *GenerateCharactersRequest) (string, error) {
+func (s *ScriptGenerationService) GenerateCharacters(userID string, apiKey string, req *GenerateCharactersRequest) (string, error) {
+	userID = normalizeUserID(userID)
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", req.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", req.DramaID, userID).First(&drama).Error; err != nil {
 		return "", fmt.Errorf("drama not found")
 	}
 
@@ -55,14 +56,15 @@ func (s *ScriptGenerationService) GenerateCharacters(req *GenerateCharactersRequ
 	}
 
 	// 异步处理角色生成
-	go s.processCharacterGeneration(task.ID, req)
+	go s.processCharacterGeneration(task.ID, userID, apiKey, req)
 
 	s.log.Infow("Character generation task created", "task_id", task.ID, "drama_id", req.DramaID)
 	return task.ID, nil
 }
 
 // processCharacterGeneration 异步处理角色生成
-func (s *ScriptGenerationService) processCharacterGeneration(taskID string, req *GenerateCharactersRequest) {
+func (s *ScriptGenerationService) processCharacterGeneration(taskID string, userID string, apiKey string, req *GenerateCharactersRequest) {
+	userID = normalizeUserID(userID)
 	// 更新任务状态为处理中
 	s.taskService.UpdateTaskStatus(taskID, "processing", 0, "正在生成角色...")
 
@@ -73,7 +75,7 @@ func (s *ScriptGenerationService) processCharacterGeneration(taskID string, req 
 
 	// 获取 drama 的 style 信息
 	var drama models.Drama
-	if err := s.db.Where("id = ? ", req.DramaID).First(&drama).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", req.DramaID, userID).First(&drama).Error; err != nil {
 		s.log.Errorw("Drama not found during character generation", "error", err, "drama_id", req.DramaID)
 		s.taskService.UpdateTaskStatus(taskID, "failed", 0, "剧本信息不存在")
 		return
@@ -98,15 +100,15 @@ func (s *ScriptGenerationService) processCharacterGeneration(taskID string, req 
 	var err error
 	if req.Model != "" {
 		s.log.Infow("Using specified model for character generation", "model", req.Model, "task_id", taskID)
-		client, getErr := s.aiService.GetAIClientForModel("text", req.Model)
+		client, getErr := s.aiService.GetAIClientForModelWithAPIKey("text", req.Model, apiKey)
 		if getErr != nil {
 			s.log.Warnw("Failed to get client for specified model, using default", "model", req.Model, "error", getErr, "task_id", taskID)
-			text, err = s.aiService.GenerateText(userPrompt, systemPrompt, ai.WithTemperature(temperature))
+			text, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt, ai.WithTemperature(temperature))
 		} else {
 			text, err = client.GenerateText(userPrompt, systemPrompt, ai.WithTemperature(temperature))
 		}
 	} else {
-		text, err = s.aiService.GenerateText(userPrompt, systemPrompt, ai.WithTemperature(temperature))
+		text, err = s.aiService.GenerateTextWithAPIKey(apiKey, userPrompt, systemPrompt, ai.WithTemperature(temperature))
 	}
 
 	if err != nil {

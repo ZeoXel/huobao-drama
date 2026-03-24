@@ -390,7 +390,7 @@ func (s *StoryboardCompositionService) GenerateSceneImage(req *GenerateSceneImag
 			Size:      "2560x1440", // 3,686,400像素，满足doubao模型最低要求（16:9比例）
 			Quality:   "standard",
 		}
-		imageGen, err := s.imageGen.GenerateImage(genReq)
+		imageGen, err := s.imageGen.GenerateImage(drama.UserID, "", genReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate image: %w", err)
 		}

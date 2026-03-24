@@ -126,7 +126,7 @@ func (h *UploadHandler) UploadCharacterImage(c *gin.Context) {
 	}
 
 	// 更新角色的image_url字段到数据库
-	err = h.characterLibraryService.UploadCharacterImage(characterID, result.URL)
+	err = h.characterLibraryService.UploadCharacterImage(currentUserID(c), characterID, result.URL)
 	if err != nil {
 		h.log.Errorw("Failed to update character image_url", "error", err, "character_id", characterID)
 		response.InternalError(c, "更新角色图片失败")

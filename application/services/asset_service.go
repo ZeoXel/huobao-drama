@@ -67,7 +67,8 @@ type ListAssetsRequest struct {
 	PageSize     int               `json:"page_size"`
 }
 
-func (s *AssetService) CreateAsset(req *CreateAssetRequest) (*models.Asset, error) {
+func (s *AssetService) CreateAsset(userID string, req *CreateAssetRequest) (*models.Asset, error) {
+	userID = normalizeUserID(userID)
 	var dramaID *uint
 	if req.DramaID != nil && *req.DramaID != "" {
 		id, err := strconv.ParseUint(*req.DramaID, 10, 32)
@@ -79,12 +80,13 @@ func (s *AssetService) CreateAsset(req *CreateAssetRequest) (*models.Asset, erro
 
 	if dramaID != nil {
 		var drama models.Drama
-		if err := s.db.Where("id = ?", *dramaID).First(&drama).Error; err != nil {
+		if err := s.db.Where("id = ? AND user_id = ?", *dramaID, userID).First(&drama).Error; err != nil {
 			return nil, fmt.Errorf("drama not found")
 		}
 	}
 
 	asset := &models.Asset{
+		UserID:       userID,
 		DramaID:      dramaID,
 		Name:         req.Name,
 		Description:  req.Description,
@@ -110,9 +112,10 @@ func (s *AssetService) CreateAsset(req *CreateAssetRequest) (*models.Asset, erro
 	return asset, nil
 }
 
-func (s *AssetService) UpdateAsset(assetID uint, req *UpdateAssetRequest) (*models.Asset, error) {
+func (s *AssetService) UpdateAsset(userID string, assetID uint, req *UpdateAssetRequest) (*models.Asset, error) {
+	userID = normalizeUserID(userID)
 	var asset models.Asset
-	if err := s.db.Where("id = ?", assetID).First(&asset).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", assetID, userID).First(&asset).Error; err != nil {
 		return nil, fmt.Errorf("asset not found")
 	}
 
@@ -139,16 +142,17 @@ func (s *AssetService) UpdateAsset(assetID uint, req *UpdateAssetRequest) (*mode
 		}
 	}
 
-	if err := s.db.First(&asset, assetID).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", assetID, userID).First(&asset).Error; err != nil {
 		return nil, err
 	}
 
 	return &asset, nil
 }
 
-func (s *AssetService) GetAsset(assetID uint) (*models.Asset, error) {
+func (s *AssetService) GetAsset(userID string, assetID uint) (*models.Asset, error) {
+	userID = normalizeUserID(userID)
 	var asset models.Asset
-	if err := s.db.Where("id = ? ", assetID).First(&asset).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", assetID, userID).First(&asset).Error; err != nil {
 		return nil, err
 	}
 
@@ -157,8 +161,9 @@ func (s *AssetService) GetAsset(assetID uint) (*models.Asset, error) {
 	return &asset, nil
 }
 
-func (s *AssetService) ListAssets(req *ListAssetsRequest) ([]models.Asset, int64, error) {
-	query := s.db.Model(&models.Asset{})
+func (s *AssetService) ListAssets(userID string, req *ListAssetsRequest) ([]models.Asset, int64, error) {
+	userID = normalizeUserID(userID)
+	query := s.db.Model(&models.Asset{}).Where("user_id = ?", userID)
 
 	if req.DramaID != nil {
 		var dramaID uint64
@@ -206,8 +211,9 @@ func (s *AssetService) ListAssets(req *ListAssetsRequest) ([]models.Asset, int64
 	return assets, total, nil
 }
 
-func (s *AssetService) DeleteAsset(assetID uint) error {
-	result := s.db.Where("id = ?", assetID).Delete(&models.Asset{})
+func (s *AssetService) DeleteAsset(userID string, assetID uint) error {
+	userID = normalizeUserID(userID)
+	result := s.db.Where("id = ? AND user_id = ?", assetID, userID).Delete(&models.Asset{})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -217,9 +223,10 @@ func (s *AssetService) DeleteAsset(assetID uint) error {
 	return nil
 }
 
-func (s *AssetService) ImportFromImageGen(imageGenID uint) (*models.Asset, error) {
+func (s *AssetService) ImportFromImageGen(userID string, imageGenID uint) (*models.Asset, error) {
+	userID = normalizeUserID(userID)
 	var imageGen models.ImageGeneration
-	if err := s.db.Where("id = ? ", imageGenID).First(&imageGen).Error; err != nil {
+	if err := s.db.Where("id = ? AND user_id = ?", imageGenID, userID).First(&imageGen).Error; err != nil {
 		return nil, fmt.Errorf("image generation not found")
 	}
 
@@ -229,6 +236,7 @@ func (s *AssetService) ImportFromImageGen(imageGenID uint) (*models.Asset, error
 
 	dramaID := imageGen.DramaID
 	asset := &models.Asset{
+		UserID:     userID,
 		Name:       fmt.Sprintf("Image_%d", imageGen.ID),
 		Type:       models.AssetTypeImage,
 		URL:        *imageGen.ImageURL,
@@ -245,9 +253,10 @@ func (s *AssetService) ImportFromImageGen(imageGenID uint) (*models.Asset, error
 	return asset, nil
 }
 
-func (s *AssetService) ImportFromVideoGen(videoGenID uint) (*models.Asset, error) {
+func (s *AssetService) ImportFromVideoGen(userID string, videoGenID uint) (*models.Asset, error) {
+	userID = normalizeUserID(userID)
 	var videoGen models.VideoGeneration
-	if err := s.db.Preload("Storyboard.Episode").Where("id = ? ", videoGenID).First(&videoGen).Error; err != nil {
+	if err := s.db.Preload("Storyboard.Episode").Where("id = ? AND user_id = ?", videoGenID, userID).First(&videoGen).Error; err != nil {
 		return nil, fmt.Errorf("video generation not found")
 	}
 
@@ -265,6 +274,7 @@ func (s *AssetService) ImportFromVideoGen(videoGenID uint) (*models.Asset, error
 	}
 
 	asset := &models.Asset{
+		UserID:        userID,
 		Name:          fmt.Sprintf("Video_%d", videoGen.ID),
 		Type:          models.AssetTypeVideo,
 		URL:           *videoGen.VideoURL,

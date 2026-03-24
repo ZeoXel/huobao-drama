@@ -9,6 +9,7 @@ import (
 
 type Drama struct {
 	ID            uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID        string         `gorm:"type:varchar(64);index;not null;default:'standalone'" json:"user_id"`
 	Title         string         `gorm:"type:varchar(200);not null" json:"title"`
 	Description   *string        `gorm:"type:text" json:"description"`
 	Genre         *string        `gorm:"type:varchar(50)" json:"genre"`

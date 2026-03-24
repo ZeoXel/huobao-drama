@@ -36,7 +36,7 @@ func (h *DramaHandler) CreateDrama(c *gin.Context) {
 		return
 	}
 
-	drama, err := h.dramaService.CreateDrama(&req)
+	drama, err := h.dramaService.CreateDrama(currentUserID(c), &req)
 	if err != nil {
 		response.InternalError(c, "创建失败")
 		return
@@ -49,7 +49,7 @@ func (h *DramaHandler) GetDrama(c *gin.Context) {
 
 	dramaID := c.Param("id")
 
-	drama, err := h.dramaService.GetDrama(dramaID)
+	drama, err := h.dramaService.GetDrama(currentUserID(c), dramaID)
 	if err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
@@ -77,7 +77,7 @@ func (h *DramaHandler) ListDramas(c *gin.Context) {
 		query.PageSize = 20
 	}
 
-	dramas, total, err := h.dramaService.ListDramas(&query)
+	dramas, total, err := h.dramaService.ListDramas(currentUserID(c), &query)
 	if err != nil {
 		response.InternalError(c, "获取列表失败")
 		return
@@ -96,7 +96,7 @@ func (h *DramaHandler) UpdateDrama(c *gin.Context) {
 		return
 	}
 
-	drama, err := h.dramaService.UpdateDrama(dramaID, &req)
+	drama, err := h.dramaService.UpdateDrama(currentUserID(c), dramaID, &req)
 	if err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
@@ -113,7 +113,7 @@ func (h *DramaHandler) DeleteDrama(c *gin.Context) {
 
 	dramaID := c.Param("id")
 
-	if err := h.dramaService.DeleteDrama(dramaID); err != nil {
+	if err := h.dramaService.DeleteDrama(currentUserID(c), dramaID); err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
 			return
@@ -127,7 +127,7 @@ func (h *DramaHandler) DeleteDrama(c *gin.Context) {
 
 func (h *DramaHandler) GetDramaStats(c *gin.Context) {
 
-	stats, err := h.dramaService.GetDramaStats()
+	stats, err := h.dramaService.GetDramaStats(currentUserID(c))
 	if err != nil {
 		response.InternalError(c, "获取统计失败")
 		return
@@ -146,7 +146,7 @@ func (h *DramaHandler) SaveOutline(c *gin.Context) {
 		return
 	}
 
-	if err := h.dramaService.SaveOutline(dramaID, &req); err != nil {
+	if err := h.dramaService.SaveOutline(currentUserID(c), dramaID, &req); err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
 			return
@@ -168,7 +168,7 @@ func (h *DramaHandler) GetCharacters(c *gin.Context) {
 		episodeIDPtr = &episodeID
 	}
 
-	characters, err := h.dramaService.GetCharacters(dramaID, episodeIDPtr)
+	characters, err := h.dramaService.GetCharacters(currentUserID(c), dramaID, episodeIDPtr)
 	if err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
@@ -233,7 +233,7 @@ func (h *DramaHandler) SaveCharacters(c *gin.Context) {
 		}
 	}
 
-	if err := h.dramaService.SaveCharacters(dramaID, &req); err != nil {
+	if err := h.dramaService.SaveCharacters(currentUserID(c), dramaID, &req); err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
 			return
@@ -255,7 +255,7 @@ func (h *DramaHandler) SaveEpisodes(c *gin.Context) {
 		return
 	}
 
-	if err := h.dramaService.SaveEpisodes(dramaID, &req); err != nil {
+	if err := h.dramaService.SaveEpisodes(currentUserID(c), dramaID, &req); err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
 			return
@@ -277,7 +277,7 @@ func (h *DramaHandler) SaveProgress(c *gin.Context) {
 		return
 	}
 
-	if err := h.dramaService.SaveProgress(dramaID, &req); err != nil {
+	if err := h.dramaService.SaveProgress(currentUserID(c), dramaID, &req); err != nil {
 		if err.Error() == "drama not found" {
 			response.NotFound(c, "剧本不存在")
 			return
@@ -309,7 +309,7 @@ func (h *DramaHandler) FinalizeEpisode(c *gin.Context) {
 	}
 
 	// 触发视频合成任务
-	result, err := h.videoMergeService.FinalizeEpisode(episodeID, timelineData)
+	result, err := h.videoMergeService.FinalizeEpisode(currentUserID(c), currentAPIKey(c), episodeID, timelineData)
 	if err != nil {
 		h.log.Errorw("Failed to finalize episode", "error", err, "episode_id", episodeID)
 		response.InternalError(c, err.Error())
@@ -330,7 +330,10 @@ func (h *DramaHandler) DownloadEpisodeVideo(c *gin.Context) {
 
 	// 查询episode
 	var episode models.Episode
-	if err := h.db.Preload("Drama").Where("id = ?", episodeID).First(&episode).Error; err != nil {
+	if err := h.db.Preload("Drama").
+		Joins("JOIN dramas ON dramas.id = episodes.drama_id").
+		Where("episodes.id = ? AND dramas.user_id = ?", episodeID, currentUserID(c)).
+		First(&episode).Error; err != nil {
 		response.NotFound(c, "剧集不存在")
 		return
 	}

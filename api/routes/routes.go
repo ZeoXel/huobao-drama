@@ -12,7 +12,7 @@ import (
 	"os"
 )
 
-func SetupRouter(cfg *config.Config, db *gorm.DB, log *logger.Logger, localStorage interface{}) *gin.Engine {
+func SetupRouter(cfg *config.Config, db *gorm.DB, log *logger.Logger, localStorage *storage2.LocalStorage, storageService storage2.StorageService) *gin.Engine {
 	r := gin.New()
 
 	r.Use(gin.Recovery())
@@ -20,6 +20,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, log *logger.Logger, localStora
 	r.Use(middlewares2.CORSMiddleware(cfg.Server.CORSOrigins))
 
 	// 静态文件服务（用户上传的文件）
+	// local 模式开启静态文件目录；cos 模式仍保留本地目录用于兼容回退
 	r.Static("/static", cfg.Storage.LocalPath)
 
 	r.GET("/health", func(c *gin.Context) {
@@ -31,20 +32,19 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, log *logger.Logger, localStora
 	})
 
 	aiService := services2.NewAIService(db, log)
-	localStoragePtr := localStorage.(*storage2.LocalStorage)
 	transferService := services2.NewResourceTransferService(db, log)
 	promptI18n := services2.NewPromptI18n(cfg)
-	dramaHandler := handlers2.NewDramaHandler(db, cfg, log, nil)
+	dramaHandler := handlers2.NewDramaHandler(db, cfg, log, transferService, storageService)
 	aiConfigHandler := handlers2.NewAIConfigHandler(db, cfg, log)
 	scriptGenHandler := handlers2.NewScriptGenerationHandler(db, cfg, log)
-	imageGenService := services2.NewImageGenerationService(db, cfg, transferService, localStoragePtr, log)
-	imageGenHandler := handlers2.NewImageGenerationHandler(db, cfg, log, transferService, localStoragePtr)
-	videoGenHandler := handlers2.NewVideoGenerationHandler(db, transferService, localStoragePtr, aiService, log, promptI18n)
-	videoMergeHandler := handlers2.NewVideoMergeHandler(db, nil, cfg.Storage.LocalPath, cfg.Storage.BaseURL, log)
+	imageGenService := services2.NewImageGenerationService(db, cfg, transferService, localStorage, storageService, log)
+	imageGenHandler := handlers2.NewImageGenerationHandler(db, cfg, log, transferService, localStorage, storageService)
+	videoGenHandler := handlers2.NewVideoGenerationHandler(db, transferService, localStorage, storageService, aiService, log, promptI18n)
+	videoMergeHandler := handlers2.NewVideoMergeHandler(db, transferService, cfg.Storage.LocalPath, cfg.Storage.BaseURL, storageService, log)
 	assetHandler := handlers2.NewAssetHandler(db, cfg, log)
 	characterLibraryService := services2.NewCharacterLibraryService(db, log, cfg)
-	characterLibraryHandler := handlers2.NewCharacterLibraryHandler(db, cfg, log, transferService, localStoragePtr)
-	uploadHandler, err := handlers2.NewUploadHandler(cfg, log, characterLibraryService)
+	characterLibraryHandler := handlers2.NewCharacterLibraryHandler(db, cfg, log, transferService, localStorage, storageService)
+	uploadHandler, err := handlers2.NewUploadHandler(cfg, log, characterLibraryService, storageService)
 	if err != nil {
 		log.Fatalw("Failed to create upload handler", "error", err)
 	}

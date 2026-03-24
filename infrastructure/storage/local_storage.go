@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +30,72 @@ func NewLocalStorage(basePath, baseURL string) (*LocalStorage, error) {
 	}, nil
 }
 
+func (s *LocalStorage) Save(ctx context.Context, key string, data []byte, contentType string) (string, error) {
+	return s.SaveReader(ctx, key, bytes.NewReader(data), contentType)
+}
+
+func (s *LocalStorage) SaveReader(ctx context.Context, key string, reader io.Reader, contentType string) (string, error) {
+	cleanKey := strings.Trim(strings.TrimSpace(filepath.ToSlash(key)), "/")
+	if cleanKey == "" {
+		return "", fmt.Errorf("empty storage key")
+	}
+	absPath := filepath.Join(s.basePath, filepath.FromSlash(cleanKey))
+	if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create key directory: %w", err)
+	}
+	dst, err := os.Create(absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, reader); err != nil {
+		return "", fmt.Errorf("failed to save file: %w", err)
+	}
+	return s.GetURL(ctx, cleanKey)
+}
+
+func (s *LocalStorage) DownloadAndSave(ctx context.Context, remoteURL string, key string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, remoteURL, nil)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to download file: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download file: HTTP %d", resp.StatusCode)
+	}
+	return s.SaveReader(ctx, key, resp.Body, resp.Header.Get("Content-Type"))
+}
+
+func (s *LocalStorage) GetURL(ctx context.Context, key string) (string, error) {
+	cleanKey := strings.Trim(strings.TrimSpace(filepath.ToSlash(key)), "/")
+	if cleanKey == "" {
+		return "", fmt.Errorf("empty storage key")
+	}
+	return fmt.Sprintf("%s/%s", strings.TrimRight(s.baseURL, "/"), cleanKey), nil
+}
+
+func (s *LocalStorage) GetLocalPath(ctx context.Context, key string) (string, func(), error) {
+	cleanKey := strings.Trim(strings.TrimSpace(filepath.ToSlash(key)), "/")
+	if cleanKey == "" {
+		return "", nil, fmt.Errorf("empty storage key")
+	}
+	localPath := filepath.Join(s.basePath, filepath.FromSlash(cleanKey))
+	return localPath, func() {}, nil
+}
+
+func (s *LocalStorage) Delete(ctx context.Context, key string) error {
+	cleanKey := strings.Trim(strings.TrimSpace(filepath.ToSlash(key)), "/")
+	if cleanKey == "" {
+		return fmt.Errorf("empty storage key")
+	}
+	return os.Remove(filepath.Join(s.basePath, filepath.FromSlash(cleanKey)))
+}
+
 func (s *LocalStorage) Upload(file io.Reader, filename string, category string) (string, error) {
 	dir := filepath.Join(s.basePath, category)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -52,12 +120,8 @@ func (s *LocalStorage) Upload(file io.Reader, filename string, category string) 
 	return url, nil
 }
 
-func (s *LocalStorage) Delete(url string) error {
+func (s *LocalStorage) DeleteLegacy(url string) error {
 	return nil
-}
-
-func (s *LocalStorage) GetURL(path string) string {
-	return fmt.Sprintf("%s/%s", s.baseURL, path)
 }
 
 // DownloadResult 下载结果，包含URL和相对路径

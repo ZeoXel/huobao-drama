@@ -2,6 +2,7 @@ package handlers
 
 import (
 	services2 "github.com/drama-generator/backend/application/services"
+	"github.com/drama-generator/backend/infrastructure/storage"
 	"github.com/drama-generator/backend/pkg/config"
 	"github.com/drama-generator/backend/pkg/logger"
 	"github.com/drama-generator/backend/pkg/response"
@@ -14,8 +15,8 @@ type UploadHandler struct {
 	log                     *logger.Logger
 }
 
-func NewUploadHandler(cfg *config.Config, log *logger.Logger, characterLibraryService *services2.CharacterLibraryService) (*UploadHandler, error) {
-	uploadService, err := services2.NewUploadService(cfg, log)
+func NewUploadHandler(cfg *config.Config, log *logger.Logger, characterLibraryService *services2.CharacterLibraryService, storageService storage.StorageService) (*UploadHandler, error) {
+	uploadService, err := services2.NewUploadService(cfg, storageService, log)
 	if err != nil {
 		return nil, err
 	}

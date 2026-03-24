@@ -1,6 +1,10 @@
 package middlewares
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,7 +18,7 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 
 		allowed := false
 		for _, o := range allowedOrigins {
-			if o == "*" || o == origin {
+			if o == "*" || o == origin || wildcardOriginMatch(o, origin) {
 				allowed = true
 				break
 			}
@@ -36,6 +40,11 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, X-User-ID, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition")
+		studioOrigin := strings.TrimSpace(os.Getenv("STUDIO_ORIGIN"))
+		if studioOrigin == "" {
+			studioOrigin = "https://studio.lsaigc.com"
+		}
+		c.Writer.Header().Set("Content-Security-Policy", fmt.Sprintf("frame-ancestors 'self' %s", studioOrigin))
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -44,4 +53,15 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func wildcardOriginMatch(pattern, origin string) bool {
+	if pattern == "" || origin == "" || !strings.Contains(pattern, "*") {
+		return false
+	}
+	parts := strings.Split(pattern, "*")
+	if len(parts) != 2 {
+		return false
+	}
+	return strings.HasPrefix(origin, parts[0]) && strings.HasSuffix(origin, parts[1])
 }

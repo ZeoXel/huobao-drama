@@ -1231,12 +1231,14 @@ import { aiAPI } from "@/api/ai";
 import type { AIServiceConfig } from "@/types/ai";
 import { imageAPI } from "@/api/image";
 import type { Drama } from "@/types/drama";
+import { useAuthStore } from "@/stores/auth";
 import { AppHeader } from "@/components/common";
 import { getImageUrl, hasImage } from "@/utils/image";
 
 const route = useRoute();
 const router = useRouter();
 const { t: $t } = useI18n();
+const authStore = useAuthStore();
 const dramaId = route.params.id as string;
 const episodeNumber = parseInt(route.params.episodeNumber as string);
 
@@ -1287,9 +1289,19 @@ const newScene = ref<any>({
 });
 const extractingScenes = ref(false);
 const uploadAction = computed(() => "/api/v1/upload/image");
-const uploadHeaders = computed(() => ({
-  Authorization: `Bearer ${localStorage.getItem("token")}`,
-}));
+const uploadHeaders = computed(() => {
+  const headers: Record<string, string> = {};
+  if (authStore.token) {
+    headers.Authorization = `Bearer ${authStore.token}`;
+  }
+  if (authStore.apiKey) {
+    headers["X-API-Key"] = authStore.apiKey;
+  }
+  if (authStore.userId) {
+    headers["X-User-ID"] = authStore.userId;
+  }
+  return headers;
+});
 
 // AI模型配置
 interface ModelOption {

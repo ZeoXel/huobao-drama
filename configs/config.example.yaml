@@ -24,6 +24,11 @@ storage:
   type: "local"
   local_path: "./data/storage"
   base_url: "http://localhost:5678/static"
+  cos_secret_id: ""
+  cos_secret_key: ""
+  cos_bucket: ""
+  cos_region: ""
+  cos_public_url: ""
 
 ai:
   default_text_provider: "openai"

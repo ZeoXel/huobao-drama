@@ -1,16 +1,21 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	models "github.com/drama-generator/backend/domain/models"
 	"github.com/drama-generator/backend/infrastructure/external/ffmpeg"
+	"github.com/drama-generator/backend/infrastructure/storage"
+	cospkg "github.com/drama-generator/backend/pkg/cos"
 	"github.com/drama-generator/backend/pkg/logger"
 	"github.com/drama-generator/backend/pkg/video"
 	"gorm.io/gorm"
@@ -23,10 +28,11 @@ type VideoMergeService struct {
 	ffmpeg          *ffmpeg.FFmpeg
 	storagePath     string
 	baseURL         string
+	storageService  storage.StorageService
 	log             *logger.Logger
 }
 
-func NewVideoMergeService(db *gorm.DB, transferService *ResourceTransferService, storagePath, baseURL string, log *logger.Logger) *VideoMergeService {
+func NewVideoMergeService(db *gorm.DB, transferService *ResourceTransferService, storagePath, baseURL string, storageService storage.StorageService, log *logger.Logger) *VideoMergeService {
 	return &VideoMergeService{
 		db:              db,
 		aiService:       NewAIService(db, log),
@@ -34,6 +40,7 @@ func NewVideoMergeService(db *gorm.DB, transferService *ResourceTransferService,
 		ffmpeg:          ffmpeg.NewFFmpeg(log),
 		storagePath:     storagePath,
 		baseURL:         baseURL,
+		storageService:  storageService,
 		log:             log,
 	}
 }
@@ -209,10 +216,8 @@ func (s *VideoMergeService) mergeVideoClips(client video.VideoClient, scenes []m
 	s.log.Infow("Video merged successfully", "path", mergedPath)
 
 	// 生成相对路径（不包含协议、IP、端口）
-	relPath := filepath.Join("videos", "merged", fileName)
-
 	result := &video.VideoResult{
-		VideoURL:  relPath, // 只保存相对路径
+		VideoURL:  mergedPath, // 返回本地绝对路径，后续由 completeMerge 决定如何持久化
 		Duration:  int(totalDuration),
 		Completed: true,
 		Status:    "completed",
@@ -258,10 +263,57 @@ func (s *VideoMergeService) completeMerge(mergeID uint, result *video.VideoResul
 		return
 	}
 
-	finalVideoURL := result.VideoURL
+	finalVideoURL := strings.TrimSpace(result.VideoURL)
+	outputPath := finalVideoURL
 
-	// 使用本地存储，不再使用MinIO
-	s.log.Infow("Video merge completed, using local storage", "merge_id", mergeID, "local_path", result.VideoURL)
+	// 合成结果优先写入统一对象存储（local/cos）。
+	if outputPath != "" && !isRemoteURL(outputPath) && s.storageService != nil {
+		absPath := outputPath
+		if !filepath.IsAbs(absPath) {
+			absPath = filepath.Join(s.storagePath, outputPath)
+		}
+		file, err := os.Open(absPath)
+		if err != nil {
+			s.log.Warnw("Failed to open merged video for storage upload", "merge_id", mergeID, "path", absPath, "error", err)
+		} else {
+			defer file.Close()
+			ext := strings.ToLower(filepath.Ext(absPath))
+			if ext == "" {
+				ext = ".mp4"
+			}
+			key := cospkg.EpisodeOutputKey(
+				normalizeUserID(videoMerge.UserID),
+				fmt.Sprintf("%d", videoMerge.DramaID),
+				fmt.Sprintf("%d", videoMerge.EpisodeID),
+				fmt.Sprintf("final_%d%s", now.Unix(), ext),
+			)
+			contentType := mime.TypeByExtension(ext)
+			if contentType == "" {
+				contentType = "video/mp4"
+			}
+			if storedURL, err := s.storageService.SaveReader(context.Background(), key, file, contentType); err != nil {
+				s.log.Warnw("Failed to store merged video via storage service", "merge_id", mergeID, "key", key, "error", err)
+			} else {
+				finalVideoURL = storedURL
+				if removeErr := os.Remove(absPath); removeErr != nil {
+					s.log.Warnw("Failed to cleanup local merged file", "merge_id", mergeID, "path", absPath, "error", removeErr)
+				}
+				s.log.Infow("Merged video stored via storage service", "merge_id", mergeID, "key", key)
+			}
+		}
+	}
+
+	// 回退：本地路径转换为可访问 URL
+	if finalVideoURL != "" && !isRemoteURL(finalVideoURL) {
+		localPath := finalVideoURL
+		if filepath.IsAbs(localPath) {
+			if rel, err := filepath.Rel(s.storagePath, localPath); err == nil {
+				localPath = rel
+			}
+		}
+		localPath = filepath.ToSlash(strings.TrimLeft(localPath, "/"))
+		finalVideoURL = strings.TrimRight(s.baseURL, "/") + "/" + localPath
+	}
 
 	updates := map[string]interface{}{
 		"status":       models.VideoMergeStatusCompleted,
@@ -410,6 +462,31 @@ func getAssetIDString(assetID interface{}) string {
 	}
 }
 
+func isRemoteURL(path string) bool {
+	p := strings.TrimSpace(path)
+	return strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://")
+}
+
+func (s *VideoMergeService) resolveClipVideoPath(localPath *string, remoteURL string) (string, func(), error) {
+	if localPath != nil && strings.TrimSpace(*localPath) != "" {
+		key := strings.TrimSpace(*localPath)
+		if s.storageService != nil {
+			local, cleanup, err := s.storageService.GetLocalPath(context.Background(), key)
+			if err == nil && local != "" {
+				return local, cleanup, nil
+			}
+		}
+		if filepath.IsAbs(key) || filepath.HasPrefix(key, s.storagePath) {
+			return key, func() {}, nil
+		}
+		return filepath.Join(s.storagePath, key), func() {}, nil
+	}
+	if strings.TrimSpace(remoteURL) != "" {
+		return remoteURL, func() {}, nil
+	}
+	return "", func() {}, fmt.Errorf("no video path available")
+}
+
 // FinalizeEpisodeRequest 完成剧集制作请求
 type FinalizeEpisodeRequest struct {
 	EpisodeID string         `json:"episode_id"`
@@ -437,6 +514,14 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 	// 根据时间线数据构建场景片段
 	var sceneClips []models.SceneClip
 	var skippedScenes []int
+	var cleanups []func()
+	defer func() {
+		for _, fn := range cleanups {
+			if fn != nil {
+				fn()
+			}
+		}
+	}()
 
 	if timelineData != nil && len(timelineData.Clips) > 0 {
 		s.log.Infow("Processing timeline data", "clips_count", len(timelineData.Clips))
@@ -453,18 +538,11 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 				var asset models.Asset
 				if err := s.db.Where("id = ? AND type = ? AND user_id = ?", assetIDStr, models.AssetTypeVideo, userID).First(&asset).Error; err == nil {
 					// 优先使用 local_path
-					if asset.LocalPath != nil && *asset.LocalPath != "" {
-						// 检查是否已经是完整路径
-						if filepath.IsAbs(*asset.LocalPath) || filepath.HasPrefix(*asset.LocalPath, s.storagePath) {
-							videoURL = *asset.LocalPath
-						} else {
-							videoURL = filepath.Join(s.storagePath, *asset.LocalPath)
-						}
-						s.log.Infow("Using local video from asset library", "asset_id", assetIDStr, "local_path", videoURL)
-					} else {
-						// 回退到远程 URL
-						videoURL = asset.URL
-						s.log.Infow("Using remote video from asset library", "asset_id", assetIDStr, "video_url", videoURL)
+					resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(asset.LocalPath, asset.URL)
+					if resolveErr == nil {
+						videoURL = resolvedPath
+						cleanups = append(cleanups, cleanup)
+						s.log.Infow("Using video from asset library", "asset_id", assetIDStr, "video_path", videoURL)
 					}
 					// 如果asset关联了storyboard，使用关联的storyboard_id
 					if asset.StoryboardID != nil {
@@ -486,20 +564,16 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 				// 查找关联的 video_generation 记录以获取 local_path
 				var videoGen models.VideoGeneration
 				if err := s.db.Where("storyboard_id = ? AND status = ? AND user_id = ?", scene.ID, "completed", userID).Order("created_at DESC").First(&videoGen).Error; err == nil {
-					if videoGen.LocalPath != nil && *videoGen.LocalPath != "" {
-						// 检查是否已经是完整路径
-						if filepath.IsAbs(*videoGen.LocalPath) || filepath.HasPrefix(*videoGen.LocalPath, s.storagePath) {
-							videoURL = *videoGen.LocalPath
-						} else {
-							videoURL = filepath.Join(s.storagePath, *videoGen.LocalPath)
-						}
+					remoteURL := ""
+					if scene.VideoURL != nil {
+						remoteURL = *scene.VideoURL
+					}
+					resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(videoGen.LocalPath, remoteURL)
+					if resolveErr == nil {
+						videoURL = resolvedPath
 						sceneID = scene.ID
-						s.log.Infow("Using local video from video_generation", "storyboard_id", clip.StoryboardID, "local_path", videoURL)
-					} else if scene.VideoURL != nil && *scene.VideoURL != "" {
-						// 回退到远程 URL
-						videoURL = *scene.VideoURL
-						sceneID = scene.ID
-						s.log.Infow("Using remote video from storyboard", "storyboard_id", clip.StoryboardID, "video_url", videoURL)
+						cleanups = append(cleanups, cleanup)
+						s.log.Infow("Using video from video_generation", "storyboard_id", clip.StoryboardID, "video_path", videoURL)
 					}
 				} else if scene.VideoURL != nil && *scene.VideoURL != "" {
 					// 如果没有找到 video_generation，直接使用 storyboard 的 video_url
@@ -548,48 +622,34 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 			// 优先从素材库查找该分镜关联的视频
 			var videoURL string
 			var asset models.Asset
-			if err := s.db.Where("storyboard_id = ? AND type = ? AND episode_id = ?",
-				scene.ID, models.AssetTypeVideo, episode.ID).
+			if err := s.db.Where("storyboard_id = ? AND type = ? AND episode_id = ? AND user_id = ?",
+				scene.ID, models.AssetTypeVideo, episode.ID, userID).
 				Order("created_at DESC").
 				First(&asset).Error; err == nil {
-				// 优先使用 local_path
-				if asset.LocalPath != nil && *asset.LocalPath != "" {
-					// 检查是否已经是完整路径
-					if filepath.IsAbs(*asset.LocalPath) || filepath.HasPrefix(*asset.LocalPath, s.storagePath) {
-						videoURL = *asset.LocalPath
-					} else {
-						videoURL = filepath.Join(s.storagePath, *asset.LocalPath)
-					}
-					s.log.Infow("Using local video from asset library for storyboard",
+				resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(asset.LocalPath, asset.URL)
+				if resolveErr == nil {
+					videoURL = resolvedPath
+					cleanups = append(cleanups, cleanup)
+					s.log.Infow("Using video from asset library for storyboard",
 						"storyboard_id", scene.ID,
 						"asset_id", asset.ID,
-						"local_path", videoURL)
-				} else {
-					videoURL = asset.URL
-					s.log.Infow("Using remote video from asset library for storyboard",
-						"storyboard_id", scene.ID,
-						"asset_id", asset.ID,
-						"video_url", videoURL)
+						"video_path", videoURL)
 				}
 			} else {
 				// 如果素材库没有，查找 video_generation 记录
 				var videoGen models.VideoGeneration
-				if err := s.db.Where("storyboard_id = ? AND status = ?", scene.ID, "completed").Order("created_at DESC").First(&videoGen).Error; err == nil {
-					if videoGen.LocalPath != nil && *videoGen.LocalPath != "" {
-						// 检查是否已经是完整路径
-						if filepath.IsAbs(*videoGen.LocalPath) || filepath.HasPrefix(*videoGen.LocalPath, s.storagePath) {
-							videoURL = *videoGen.LocalPath
-						} else {
-							videoURL = filepath.Join(s.storagePath, *videoGen.LocalPath)
-						}
-						s.log.Infow("Using local video from video_generation for storyboard",
+				if err := s.db.Where("storyboard_id = ? AND status = ? AND user_id = ?", scene.ID, "completed", userID).Order("created_at DESC").First(&videoGen).Error; err == nil {
+					remoteURL := ""
+					if scene.VideoURL != nil {
+						remoteURL = *scene.VideoURL
+					}
+					resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(videoGen.LocalPath, remoteURL)
+					if resolveErr == nil {
+						videoURL = resolvedPath
+						cleanups = append(cleanups, cleanup)
+						s.log.Infow("Using video from video_generation for storyboard",
 							"storyboard_id", scene.ID,
-							"local_path", videoURL)
-					} else if scene.VideoURL != nil && *scene.VideoURL != "" {
-						videoURL = *scene.VideoURL
-						s.log.Infow("Using remote video from storyboard",
-							"storyboard_id", scene.ID,
-							"video_url", videoURL)
+							"video_path", videoURL)
 					}
 				} else if scene.VideoURL != nil && *scene.VideoURL != "" {
 					// 最后回退到 storyboard 的 video_url

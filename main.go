@@ -49,12 +49,15 @@ func main() {
 	}
 
 	// 初始化本地存储
+	storageService, err := storage.NewStorageService(&cfg.Storage)
+	if err != nil {
+		logr.Fatal("Failed to initialize storage service", "error", err)
+	}
+	logr.Infow("Storage service initialized", "type", cfg.Storage.Type)
+
 	var localStorage *storage.LocalStorage
-	if cfg.Storage.Type == "local" {
-		localStorage, err = storage.NewLocalStorage(cfg.Storage.LocalPath, cfg.Storage.BaseURL)
-		if err != nil {
-			logr.Fatal("Failed to initialize local storage", "error", err)
-		}
+	if ls, ok := storageService.(*storage.LocalStorage); ok {
+		localStorage = ls
 		logr.Info("Local storage initialized successfully", "path", cfg.Storage.LocalPath)
 	}
 
@@ -64,7 +67,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	router := routes.SetupRouter(cfg, db, logr, localStorage)
+	router := routes.SetupRouter(cfg, db, logr, localStorage, storageService)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),

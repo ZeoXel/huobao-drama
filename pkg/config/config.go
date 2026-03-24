@@ -44,9 +44,14 @@ type DatabaseConfig struct {
 }
 
 type StorageConfig struct {
-	Type      string `mapstructure:"type"`       // local, minio
-	LocalPath string `mapstructure:"local_path"` // 本地存储路径
-	BaseURL   string `mapstructure:"base_url"`   // 访问URL前缀
+	Type       string `mapstructure:"type"`        // local, cos
+	LocalPath  string `mapstructure:"local_path"`  // 本地存储路径
+	BaseURL    string `mapstructure:"base_url"`    // 访问URL前缀
+	COSSecretID  string `mapstructure:"cos_secret_id"`
+	COSSecretKey string `mapstructure:"cos_secret_key"`
+	COSBucket    string `mapstructure:"cos_bucket"`
+	COSRegion    string `mapstructure:"cos_region"`
+	COSPublicURL string `mapstructure:"cos_public_url"`
 }
 
 type AIConfig struct {

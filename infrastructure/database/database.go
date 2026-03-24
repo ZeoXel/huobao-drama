@@ -70,7 +70,7 @@ func NewDatabase(cfg config.DatabaseConfig) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		// 核心模型
 		&models.Drama{},
 		&models.Episode{},
@@ -95,7 +95,32 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// 任务管理
 		&models.AsyncTask{},
-	)
+	); err != nil {
+		return err
+	}
+
+	return backfillUserIDs(db)
+}
+
+func backfillUserIDs(db *gorm.DB) error {
+	tables := []string{
+		"dramas",
+		"character_libraries",
+		"image_generations",
+		"video_generations",
+		"video_merges",
+		"assets",
+	}
+
+	for _, table := range tables {
+		if err := db.Table(table).
+			Where("user_id IS NULL OR user_id = ''").
+			Update("user_id", "standalone").Error; err != nil {
+			return fmt.Errorf("failed to backfill user_id for %s: %w", table, err)
+		}
+	}
+
+	return nil
 }
 
 // InitDefaultAIConfigs 初始化默认 AI 配置（从环境变量读取）

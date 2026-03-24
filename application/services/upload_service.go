@@ -1,33 +1,35 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"os"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/drama-generator/backend/infrastructure/storage"
 	"github.com/drama-generator/backend/pkg/config"
 	"github.com/drama-generator/backend/pkg/logger"
 	"github.com/google/uuid"
 )
 
 type UploadService struct {
-	storagePath string
-	baseURL     string
-	log         *logger.Logger
+	baseURL        string
+	storageService storage.StorageService
+	log            *logger.Logger
 }
 
-func NewUploadService(cfg *config.Config, log *logger.Logger) (*UploadService, error) {
-	// 确保存储目录存在
-	if err := os.MkdirAll(cfg.Storage.LocalPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create storage directory: %w", err)
+func NewUploadService(cfg *config.Config, storageService storage.StorageService, log *logger.Logger) (*UploadService, error) {
+	if storageService == nil {
+		return nil, fmt.Errorf("storage service is required")
 	}
 
 	return &UploadService{
-		storagePath: cfg.Storage.LocalPath,
-		baseURL:     cfg.Storage.BaseURL,
-		log:         log,
+		baseURL:        cfg.Storage.BaseURL,
+		storageService: storageService,
+		log:            log,
 	}, nil
 }
 
@@ -37,43 +39,27 @@ type UploadResult struct {
 	LocalPath string // 相对路径（相对于 storage 根目录）
 }
 
-// UploadFile 上传文件到本地存储
+// UploadFile 上传文件到统一对象存储
 func (s *UploadService) UploadFile(file io.Reader, fileName, contentType string, category string) (*UploadResult, error) {
-	// 创建分类目录
-	categoryPath := filepath.Join(s.storagePath, category)
-	if err := os.MkdirAll(categoryPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create category directory: %w", err)
-	}
-
 	// 生成唯一文件名
 	ext := filepath.Ext(fileName)
+	if ext == "" {
+		ext = ".bin"
+	}
 	uniqueID := uuid.New().String()
 	timestamp := time.Now().Format("20060102_150405")
 	newFileName := fmt.Sprintf("%s_%s%s", timestamp, uniqueID, ext)
-	filePath := filepath.Join(categoryPath, newFileName)
-
-	// 创建文件
-	dst, err := os.Create(filePath)
+	objectKey := filepath.ToSlash(filepath.Join(category, newFileName))
+	fileURL, err := s.storageService.SaveReader(context.Background(), objectKey, file, contentType)
 	if err != nil {
-		s.log.Errorw("Failed to create file", "error", err, "path", filePath)
-		return nil, fmt.Errorf("创建文件失败: %w", err)
-	}
-	defer dst.Close()
-
-	// 写入文件
-	if _, err := io.Copy(dst, file); err != nil {
-		s.log.Errorw("Failed to write file", "error", err, "path", filePath)
-		return nil, fmt.Errorf("写入文件失败: %w", err)
+		s.log.Errorw("Failed to upload file", "error", err, "object_key", objectKey)
+		return nil, fmt.Errorf("上传文件失败: %w", err)
 	}
 
-	// 构建访问URL和相对路径
-	fileURL := fmt.Sprintf("%s/%s/%s", s.baseURL, category, newFileName)
-	localPath := fmt.Sprintf("%s/%s", category, newFileName)
-
-	s.log.Infow("File uploaded successfully", "path", filePath, "url", fileURL, "local_path", localPath)
+	s.log.Infow("File uploaded successfully", "url", fileURL, "local_path", objectKey)
 	return &UploadResult{
 		URL:       fileURL,
-		LocalPath: localPath,
+		LocalPath: objectKey,
 	}, nil
 }
 
@@ -82,38 +68,45 @@ func (s *UploadService) UploadCharacterImage(file io.Reader, fileName, contentTy
 	return s.UploadFile(file, fileName, contentType, "characters")
 }
 
-// DeleteFile 删除本地文件
+// DeleteFile 删除文件
 func (s *UploadService) DeleteFile(fileURL string) error {
-	// 从URL中提取相对路径
-	// URL格式: http://localhost:8080/static/characters/20060102_150405_uuid.jpg
-	relPath := s.extractRelativePathFromURL(fileURL)
-	if relPath == "" {
+	objectKey := s.extractObjectKey(fileURL)
+	if objectKey == "" {
 		return fmt.Errorf("invalid file URL")
 	}
 
-	filePath := filepath.Join(s.storagePath, relPath)
-	err := os.Remove(filePath)
+	err := s.storageService.Delete(context.Background(), objectKey)
 	if err != nil {
-		s.log.Errorw("Failed to delete file", "error", err, "path", filePath)
+		s.log.Errorw("Failed to delete file", "error", err, "object_key", objectKey)
 		return fmt.Errorf("删除文件失败: %w", err)
 	}
 
-	s.log.Infow("File deleted successfully", "path", filePath)
+	s.log.Infow("File deleted successfully", "object_key", objectKey)
 	return nil
 }
 
-// extractRelativePathFromURL 从URL中提取相对路径
-func (s *UploadService) extractRelativePathFromURL(fileURL string) string {
-	// 从baseURL后面提取路径
-	// 例如: http://localhost:8080/static/characters/xxx.jpg -> characters/xxx.jpg
-	if len(fileURL) <= len(s.baseURL) {
+// extractObjectKey 从 URL 或对象路径中提取 object key
+func (s *UploadService) extractObjectKey(fileURL string) string {
+	trimmed := strings.TrimSpace(fileURL)
+	if trimmed == "" {
 		return ""
 	}
-	return fileURL[len(s.baseURL)+1:] // +1 for the '/'
+	if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+		return strings.Trim(trimmed, "/")
+	}
+	base := strings.TrimRight(strings.TrimSpace(s.baseURL), "/")
+	if base != "" && strings.HasPrefix(trimmed, base+"/") {
+		return strings.TrimPrefix(trimmed, base+"/")
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return ""
+	}
+	return strings.Trim(parsed.Path, "/")
 }
 
-// GetPresignedURL 本地存储不需要预签名URL，直接返回原URL
+// GetPresignedURL 返回可访问 URL（COS 模式为签名 URL，本地模式为静态 URL）
 func (s *UploadService) GetPresignedURL(objectName string, expiry time.Duration) (string, error) {
-	// 本地存储通过静态文件服务直接访问，不需要预签名
-	return fmt.Sprintf("%s/%s", s.baseURL, objectName), nil
+	_ = expiry
+	return s.storageService.GetURL(context.Background(), objectName)
 }

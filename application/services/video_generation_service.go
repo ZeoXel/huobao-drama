@@ -1,8 +1,11 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +13,7 @@ import (
 	models "github.com/drama-generator/backend/domain/models"
 	"github.com/drama-generator/backend/infrastructure/external/ffmpeg"
 	"github.com/drama-generator/backend/infrastructure/storage"
+	cospkg "github.com/drama-generator/backend/pkg/cos"
 	"github.com/drama-generator/backend/pkg/logger"
 	"github.com/drama-generator/backend/pkg/utils"
 	"github.com/drama-generator/backend/pkg/video"
@@ -21,15 +25,17 @@ type VideoGenerationService struct {
 	transferService *ResourceTransferService
 	log             *logger.Logger
 	localStorage    *storage.LocalStorage
+	storageService  storage.StorageService
 	aiService       *AIService
 	ffmpeg          *ffmpeg.FFmpeg
 	promptI18n      *PromptI18n
 }
 
-func NewVideoGenerationService(db *gorm.DB, transferService *ResourceTransferService, localStorage *storage.LocalStorage, aiService *AIService, log *logger.Logger, promptI18n *PromptI18n) *VideoGenerationService {
+func NewVideoGenerationService(db *gorm.DB, transferService *ResourceTransferService, localStorage *storage.LocalStorage, storageService storage.StorageService, aiService *AIService, log *logger.Logger, promptI18n *PromptI18n) *VideoGenerationService {
 	service := &VideoGenerationService{
 		db:              db,
 		localStorage:    localStorage,
+		storageService:  storageService,
 		transferService: transferService,
 		aiService:       aiService,
 		log:             log,
@@ -458,10 +464,28 @@ func (s *VideoGenerationService) pollTaskStatus(videoGenID uint, taskID string, 
 }
 
 func (s *VideoGenerationService) completeVideoGeneration(videoGenID uint, videoURL string, duration *int, width *int, height *int, firstFrameURL *string) {
+	var videoGen models.VideoGeneration
+	if err := s.db.First(&videoGen, videoGenID).Error; err != nil {
+		s.log.Errorw("Failed to load video generation for completion", "error", err, "id", videoGenID)
+		return
+	}
+
+	storedVideoURL := videoURL
 	var localVideoPath *string
 
-	// 下载视频到本地存储并保存相对路径到数据库
-	if s.localStorage != nil && videoURL != "" {
+	// 优先写入统一对象存储
+	if s.storageService != nil && videoURL != "" && (strings.HasPrefix(videoURL, "http://") || strings.HasPrefix(videoURL, "https://")) {
+		key := s.buildVideoStorageKey(&videoGen, videoURL)
+		if key != "" {
+			if objectURL, err := s.storageService.DownloadAndSave(context.Background(), videoURL, key); err == nil {
+				localVideoPath = &key
+				storedVideoURL = objectURL
+				s.log.Infow("Video stored via storage service", "id", videoGenID, "key", key)
+			} else {
+				s.log.Warnw("Failed to store video via storage service", "id", videoGenID, "error", err)
+			}
+		}
+	} else if s.localStorage != nil && videoURL != "" {
 		downloadResult, err := s.localStorage.DownloadFromURLWithPath(videoURL, "videos")
 		if err != nil {
 			s.log.Warnw("Failed to download video to local storage",
@@ -470,6 +494,7 @@ func (s *VideoGenerationService) completeVideoGeneration(videoGenID uint, videoU
 				"original_url", videoURL)
 		} else {
 			localVideoPath = &downloadResult.RelativePath
+			storedVideoURL = downloadResult.URL
 			s.log.Infow("Video downloaded to local storage",
 				"id", videoGenID,
 				"original_url", videoURL,
@@ -477,60 +502,38 @@ func (s *VideoGenerationService) completeVideoGeneration(videoGenID uint, videoU
 		}
 	}
 
-	// 如果视频已下载到本地，探测真实时长
-	// 特别是当 AI 服务返回的 duration 为 0 或 nil 时，必须探测
-	shouldProbe := localVideoPath != nil && s.ffmpeg != nil && (duration == nil || *duration == 0)
-	if shouldProbe {
-		absPath := s.localStorage.GetAbsolutePath(*localVideoPath)
-		if probedDuration, err := s.ffmpeg.GetVideoDuration(absPath); err == nil {
-			// 转换为整数秒（向上取整）
-			durationInt := int(probedDuration + 0.5)
-			duration = &durationInt
-			s.log.Infow("Probed video duration (was 0 or nil)",
-				"id", videoGenID,
-				"duration_seconds", durationInt,
-				"duration_float", probedDuration)
-		} else {
-			s.log.Errorw("Failed to probe video duration, duration will be 0",
-				"error", err,
-				"id", videoGenID,
-				"local_path", *localVideoPath)
+	// 探测时长：统一通过 storageService.GetLocalPath 获取本地文件路径
+	if localVideoPath != nil && s.ffmpeg != nil {
+		localProbePath := ""
+		cleanup := func() {}
+		if s.storageService != nil {
+			if path, fn, err := s.storageService.GetLocalPath(context.Background(), *localVideoPath); err == nil {
+				localProbePath = path
+				cleanup = fn
+			}
 		}
-	} else if localVideoPath != nil && s.ffmpeg != nil && duration != nil && *duration > 0 {
-		// 即使有 duration，也验证一下（可选）
-		absPath := s.localStorage.GetAbsolutePath(*localVideoPath)
-		if probedDuration, err := s.ffmpeg.GetVideoDuration(absPath); err == nil {
-			durationInt := int(probedDuration + 0.5)
-			if durationInt != *duration {
-				s.log.Warnw("Probed duration differs from provided duration",
-					"id", videoGenID,
-					"provided", *duration,
-					"probed", durationInt)
-				// 使用探测到的时长（更准确）
-				duration = &durationInt
+		if localProbePath == "" && s.localStorage != nil {
+			localProbePath = s.localStorage.GetAbsolutePath(*localVideoPath)
+		}
+		defer cleanup()
+
+		if localProbePath != "" {
+			if probedDuration, err := s.ffmpeg.GetVideoDuration(localProbePath); err == nil {
+				durationInt := int(probedDuration + 0.5)
+				if duration == nil || *duration == 0 || durationInt != *duration {
+					duration = &durationInt
+					s.log.Infow("Using probed video duration", "id", videoGenID, "duration_seconds", durationInt)
+				}
+			} else if duration == nil || *duration == 0 {
+				s.log.Errorw("Failed to probe video duration", "error", err, "id", videoGenID, "local_path", localProbePath)
 			}
 		}
 	}
 
-	// 下载首帧图片到本地存储（仅用于缓存，不更新数据库）
-	if firstFrameURL != nil && *firstFrameURL != "" && s.localStorage != nil {
-		_, err := s.localStorage.DownloadFromURL(*firstFrameURL, "video_frames")
-		if err != nil {
-			s.log.Warnw("Failed to download first frame to local storage",
-				"error", err,
-				"id", videoGenID,
-				"original_url", *firstFrameURL)
-		} else {
-			s.log.Infow("First frame downloaded to local storage for caching",
-				"id", videoGenID,
-				"original_url", *firstFrameURL)
-		}
-	}
-
-	// 数据库中保存原始URL和本地路径
+	// 数据库中保存 URL 和对象 key
 	updates := map[string]interface{}{
 		"status":     models.VideoStatusCompleted,
-		"video_url":  videoURL,
+		"video_url":  storedVideoURL,
 		"local_path": localVideoPath,
 	}
 	// 只有当 duration 大于 0 时才保存，避免保存无效的 0 值
@@ -552,26 +555,52 @@ func (s *VideoGenerationService) completeVideoGeneration(videoGenID uint, videoU
 		return
 	}
 
-	var videoGen models.VideoGeneration
-	if err := s.db.First(&videoGen, videoGenID).Error; err == nil {
-		if videoGen.StoryboardID != nil {
-			// 更新 Storyboard 的 video_url 和 duration
-			storyboardUpdates := map[string]interface{}{
-				"video_url": videoURL,
-			}
-			// 只有当 duration 大于 0 时才更新，避免用无效的 0 值覆盖
-			if duration != nil && *duration > 0 {
-				storyboardUpdates["duration"] = *duration
-			}
-			if err := s.db.Model(&models.Storyboard{}).Where("id = ?", *videoGen.StoryboardID).Updates(storyboardUpdates).Error; err != nil {
-				s.log.Warnw("Failed to update storyboard", "storyboard_id", *videoGen.StoryboardID, "error", err)
-			} else {
-				s.log.Infow("Updated storyboard with video info", "storyboard_id", *videoGen.StoryboardID, "duration", duration)
-			}
+	if videoGen.StoryboardID != nil {
+		storyboardUpdates := map[string]interface{}{
+			"video_url": storedVideoURL,
+		}
+		if duration != nil && *duration > 0 {
+			storyboardUpdates["duration"] = *duration
+		}
+		if err := s.db.Model(&models.Storyboard{}).Where("id = ?", *videoGen.StoryboardID).Updates(storyboardUpdates).Error; err != nil {
+			s.log.Warnw("Failed to update storyboard", "storyboard_id", *videoGen.StoryboardID, "error", err)
+		} else {
+			s.log.Infow("Updated storyboard with video info", "storyboard_id", *videoGen.StoryboardID, "duration", duration)
 		}
 	}
 
-	s.log.Infow("Video generation completed", "id", videoGenID, "url", videoURL, "duration", duration)
+	s.log.Infow("Video generation completed", "id", videoGenID, "url", storedVideoURL, "duration", duration)
+}
+
+func videoExtFromURL(urlStr string) string {
+	parsed, err := url.Parse(urlStr)
+	if err == nil {
+		ext := strings.ToLower(filepath.Ext(parsed.Path))
+		if ext != "" {
+			return ext
+		}
+	}
+	return ".mp4"
+}
+
+func (s *VideoGenerationService) buildVideoStorageKey(videoGen *models.VideoGeneration, videoURL string) string {
+	if videoGen == nil {
+		return ""
+	}
+	userID := normalizeUserID(videoGen.UserID)
+	dramaID := fmt.Sprintf("%d", videoGen.DramaID)
+	filename := fmt.Sprintf("video_%d%s", time.Now().Unix(), videoExtFromURL(videoURL))
+
+	if videoGen.StoryboardID != nil {
+		var storyboard models.Storyboard
+		if err := s.db.Select("id, episode_id").Where("id = ?", *videoGen.StoryboardID).First(&storyboard).Error; err == nil {
+			return cospkg.StoryboardKey(userID, dramaID, fmt.Sprintf("%d", storyboard.EpisodeID), fmt.Sprintf("%d", *videoGen.StoryboardID), filename)
+		}
+	}
+	if videoGen.ImageGenID != nil {
+		return cospkg.EpisodeOutputKey(userID, dramaID, "misc", filename)
+	}
+	return cospkg.EpisodeOutputKey(userID, dramaID, "misc", filename)
 }
 
 func (s *VideoGenerationService) updateVideoGenError(videoGenID uint, errorMsg string) {

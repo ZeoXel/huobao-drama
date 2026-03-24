@@ -4,7 +4,7 @@
   <div class="page-container">
     <div class="content-wrapper animate-fade-in">
       <!-- App Header / 应用头部 -->
-      <AppHeader :fixed="false">
+      <AppHeader :fixed="false" :show-logo="false">
         <template #left>
           <div class="page-title">
             <h1>{{ $t("drama.title") }}</h1>

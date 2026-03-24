@@ -5,7 +5,7 @@
       <div class="header-content">
         <div class="header-left">
           <router-link to="/" class="logo">
-            <span class="logo-text">🎬 HuoBao Drama</span>
+            <span class="logo-text">短剧工作台</span>
           </router-link>
         </div>
         <div class="header-right">

@@ -14,7 +14,7 @@
         <div class="header-actions">
           <el-button type="success" size="small" @click="showQuickSetupDialog">
             <el-icon><MagicStick /></el-icon>
-            <span>一键配置火宝</span>
+            <span>快速配置</span>
           </el-button>
           <el-button type="primary" size="small" @click="showCreateDialog">
             <el-icon><Plus /></el-icon>

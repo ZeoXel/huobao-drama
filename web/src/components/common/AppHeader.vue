@@ -5,7 +5,7 @@
         <!-- Left section: Logo + Left slot -->
         <div class="header-left">
           <router-link v-if="showLogo" to="/" class="logo">
-            <span class="logo-text">🎬 HuoBao Drama</span>
+            <span class="logo-text">{{ appTitle }}</span>
           </router-link>
           <!-- Left slot for business content | 左侧插槽用于业务内容 -->
           <slot name="left" />
@@ -79,11 +79,13 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   fixed: true,
-  showLogo: true,
+  showLogo: false,
   showLanguage: true,
   showTheme: true,
   showAIConfig: true
 })
+
+const appTitle = '短剧工作台'
 
 const emit = defineEmits<{
   (e: 'open-ai-config'): void

@@ -3,7 +3,7 @@
     <div class="content-wrapper animate-fade-in">
       <AppHeader :fixed="false" :show-logo="false">
         <template #left>
-          <el-button text @click="$router.back()" class="back-btn">
+          <el-button text @click="goBack" class="back-btn">
             <el-icon><ArrowLeft /></el-icon>
             <span>{{ $t("workflow.backToProject") }}</span>
           </el-button>

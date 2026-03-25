@@ -29,13 +29,10 @@ export const useAuthStore = defineStore('auth', {
       this.ready = true
     },
     initStandalone() {
-      const storedID = localStorage.getItem('standalone_user_id')
-      const userID = storedID || crypto.randomUUID()
-      if (!storedID) {
-        localStorage.setItem('standalone_user_id', userID)
-      }
-
-      this.userId = userID
+      // Use fixed "standalone" to match the database backfill default value.
+      // All pre-existing data has user_id = 'standalone', so we must use the
+      // same value to ensure queries like WHERE user_id = ? can find them.
+      this.userId = 'standalone'
       this.token = null
       this.apiKey = null
       this.standaloneMode = true

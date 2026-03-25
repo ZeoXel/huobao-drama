@@ -22,8 +22,37 @@ if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-s
 const app = createApp(App)
 const pinia = createPinia()
 const authStore = useAuthStore(pinia)
-const STUDIO_ORIGIN = import.meta.env.VITE_STUDIO_ORIGIN || 'https://studio.lsaigc.com'
 const isInIframe = window.self !== window.top
+const DEFAULT_STUDIO_ORIGIN = 'https://studio.lsaigc.com'
+
+const envStudioOrigins = (import.meta.env.VITE_STUDIO_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+const inferredStudioOrigin = (() => {
+  if (!isInIframe || !document.referrer) return ''
+  try {
+    return new URL(document.referrer).origin
+  } catch {
+    return ''
+  }
+})()
+
+const allowedStudioOrigins = Array.from(new Set([
+  ...envStudioOrigins,
+  inferredStudioOrigin
+].filter(Boolean)))
+
+const canAutoDetectStudioOrigin = import.meta.env.DEV && allowedStudioOrigins.length === 0
+let studioTargetOrigin = inferredStudioOrigin || envStudioOrigins[0] || DEFAULT_STUDIO_ORIGIN
+
+const isAllowedStudioOrigin = (origin: string) => {
+  if (allowedStudioOrigins.length === 0) {
+    return origin === DEFAULT_STUDIO_ORIGIN
+  }
+  return allowedStudioOrigins.includes(origin)
+}
 
 if (isInIframe) {
   document.documentElement.classList.add('iframe-mode')
@@ -31,8 +60,16 @@ if (isInIframe) {
 
   // Register listener before sending DRAMA_READY to avoid race conditions.
   window.addEventListener('message', (event) => {
-    if (event.origin !== STUDIO_ORIGIN) {
-      return
+    const msgType = event.data?.type
+    const isAuthMessage = msgType === 'STUDIO_AUTH' || msgType === 'STUDIO_AUTH_REFRESH'
+
+    if (!isAllowedStudioOrigin(event.origin)) {
+      if (canAutoDetectStudioOrigin && isAuthMessage) {
+        allowedStudioOrigins.push(event.origin)
+        studioTargetOrigin = event.origin
+      } else {
+        return
+      }
     }
 
     if (event.data?.type === 'STUDIO_AUTH') {
@@ -42,6 +79,19 @@ if (isInIframe) {
 
     if (event.data?.type === 'STUDIO_AUTH_REFRESH' && authStore.ready) {
       authStore.refresh(event.data)
+      return
+    }
+
+    // Theme sync: studio parent tells us which theme to use
+    if (event.data?.type === 'STUDIO_THEME') {
+      const nextTheme = event.data?.theme as string
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark')
+        localStorage.setItem('theme', 'dark')
+      } else if (nextTheme === 'light') {
+        document.documentElement.classList.remove('dark')
+        localStorage.setItem('theme', 'light')
+      }
     }
   })
 } else {
@@ -66,11 +116,11 @@ if (isInIframe) {
       document.body.scrollHeight,
       document.documentElement.offsetHeight
     )
-    window.parent.postMessage({ type: 'DRAMA_RESIZE', height }, STUDIO_ORIGIN)
+    window.parent.postMessage({ type: 'DRAMA_RESIZE', height }, studioTargetOrigin)
   }
 
   router.isReady().then(() => {
-    window.parent.postMessage({ type: 'DRAMA_READY' }, STUDIO_ORIGIN)
+    window.parent.postMessage({ type: 'DRAMA_READY' }, studioTargetOrigin)
     syncIframeHeight()
   })
 
@@ -86,7 +136,8 @@ if (isInIframe) {
 
   window.setTimeout(() => {
     if (!authStore.ready) {
-      console.error('[Auth] Studio auth timeout after 5s')
+      console.warn('[Auth] Studio auth timeout after 5s, falling back to standalone mode')
+      authStore.initStandalone()
     }
   }, 5000)
 }

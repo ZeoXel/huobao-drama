@@ -34,8 +34,15 @@ func AuthMiddleware(nextAuthSecret string) gin.HandlerFunc {
 		}
 
 		if nextAuthSecret == "" {
-			c.JSON(500, gin.H{"error": "server auth secret not configured"})
-			c.Abort()
+			// Secret not configured (local dev) — fall back to standalone mode
+			// instead of blocking the request.
+			userID := strings.TrimSpace(c.GetHeader("X-User-ID"))
+			if userID == "" {
+				userID = "standalone"
+			}
+			c.Set(string(CtxUserID), userID)
+			c.Set(string(CtxAPIKey), "")
+			c.Next()
 			return
 		}
 

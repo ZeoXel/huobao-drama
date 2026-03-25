@@ -77,11 +77,14 @@ const router = createRouter({
   routes
 })
 
+let hasWaitedForAuthReady = false
+
 router.beforeEach(async () => {
   const auth = useAuthStore()
-  if (auth.ready) {
+  if (auth.ready || hasWaitedForAuthReady) {
     return true
   }
+  hasWaitedForAuthReady = true
 
   await new Promise<void>((resolve) => {
     const stop = watch(

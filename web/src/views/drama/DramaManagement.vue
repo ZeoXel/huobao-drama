@@ -4,7 +4,7 @@
       <!-- Page Header / 页面头部 -->
       <AppHeader :fixed="false" :show-logo="false">
         <template #left>
-          <el-button text @click="$router.back()" class="back-btn">
+          <el-button text @click="goBackToDramaList" class="back-btn">
             <el-icon><ArrowLeft /></el-icon>
             <span>{{ $t("common.back") }}</span>
           </el-button>
@@ -794,6 +794,10 @@ import { getImageUrl, hasImage } from "@/utils/image";
 
 const router = useRouter();
 const route = useRoute();
+
+const goBackToDramaList = () => {
+  router.push("/");
+};
 
 const drama = ref<Drama>();
 const activeTab = ref((route.query.tab as string) || "overview");

@@ -67,3 +67,7 @@ build.sh
 /web/package-lock.json
 .DS_Store
 .vercel
+
+# Deploy sensitive files
+deploy/.env.production
+DEPLOY-PRODUCTION.md

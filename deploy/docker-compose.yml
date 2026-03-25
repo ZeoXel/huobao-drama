@@ -1,0 +1,14 @@
+services:
+  drama:
+    image: crpi-dj1plh5tmmlskal3.cn-hangzhou.personal.cr.aliyuncs.com/studio1111/huobao-drama:latest
+    container_name: huobao-drama
+    restart: always
+    ports:
+      - "127.0.0.1:5678:5678"
+    env_file: .env.production
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5678/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

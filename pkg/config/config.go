@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -72,6 +73,36 @@ func LoadConfig() (*Config, error) {
 	viper.AddConfigPath(".")
 
 	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// 显式绑定嵌套配置的环境变量（Unmarshal 不会自动触发 AutomaticEnv 查找）
+	// Database
+	viper.BindEnv("database.type", "DATABASE_TYPE")
+	viper.BindEnv("database.host", "DATABASE_HOST")
+	viper.BindEnv("database.port", "DATABASE_PORT")
+	viper.BindEnv("database.user", "DATABASE_USER")
+	viper.BindEnv("database.password", "DATABASE_PASSWORD")
+	viper.BindEnv("database.database", "DATABASE_NAME")
+	viper.BindEnv("database.sslmode", "DATABASE_SSLMODE")
+	viper.BindEnv("database.max_idle", "DATABASE_MAX_IDLE")
+	viper.BindEnv("database.max_open", "DATABASE_MAX_OPEN")
+	// Storage
+	viper.BindEnv("storage.type", "STORAGE_TYPE")
+	viper.BindEnv("storage.cos_secret_id", "COS_SECRET_ID")
+	viper.BindEnv("storage.cos_secret_key", "COS_SECRET_KEY")
+	viper.BindEnv("storage.cos_bucket", "COS_BUCKET")
+	viper.BindEnv("storage.cos_region", "COS_REGION")
+	viper.BindEnv("storage.cos_public_url", "COS_PUBLIC_URL")
+	// Server
+	viper.BindEnv("server.port", "SERVER_PORT")
+	// Auth
+	viper.BindEnv("auth.nextauth_secret", "NEXTAUTH_SECRET")
+	// App
+	viper.BindEnv("app.debug", "APP_DEBUG")
+	// AI Gateway
+	viper.BindEnv("ai.gateway_url", "GATEWAY_URL")
+	// CORS
+	viper.BindEnv("server.studio_origin", "STUDIO_ORIGIN")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)

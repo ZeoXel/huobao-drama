@@ -202,7 +202,7 @@ html.iframe-mode .page-container .content-wrapper {
 }
 
 html.iframe-mode .stage-card-fullscreen {
-  min-height: calc(100% - 70px) !important;
+  min-height: calc(100% - 48px) !important;
 }
 
 html.iframe-mode .professional-editor .editor-main {
@@ -227,15 +227,20 @@ html.iframe-mode pre {
   font-family: 'Geist Mono', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
-/* --- Hide AppHeader in iframe (studio provides its own sidebar/nav) --- */
-html.iframe-mode .app-header-wrapper,
-html.iframe-mode .app-header,
-html.iframe-mode .app-layout > .app-header {
+/* --- Slim down AppHeader in iframe (keep back button + title, hide redundant chrome) --- */
+html.iframe-mode .app-header .logo,
+html.iframe-mode .app-header .header-right {
   display: none !important;
 }
 
-html.iframe-mode .app-layout > .app-main {
-  margin-top: 0;
+html.iframe-mode .app-header .header-content {
+  height: 48px;
+  min-height: 48px;
+}
+
+html.iframe-mode .app-header {
+  position: relative !important;
+  border-bottom-color: var(--border-primary);
 }
 
 /* --- Light mode overrides --- */

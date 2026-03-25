@@ -64,12 +64,6 @@ const routes: RouteRecordRaw[] = [
     name: 'ProfessionalEditor',
     component: () => import('../views/drama/ProfessionalEditor.vue')
   },
-  // AI 配置已通过环境变量自动初始化，隐藏前端配置界面
-  // {
-  //   path: '/settings/ai-config',
-  //   name: 'AIConfig',
-  //   component: () => import('../views/settings/AIConfig.vue')
-  // }
 ]
 
 const router = createRouter({
@@ -77,9 +71,41 @@ const router = createRouter({
   routes
 })
 
+// --- Navigation progress bar ---
+let progressBar: HTMLDivElement | null = null
+
+function showProgress() {
+  if (!progressBar) {
+    progressBar = document.createElement('div')
+    progressBar.id = 'nav-progress'
+    progressBar.style.cssText =
+      'position:fixed;top:0;left:0;height:2px;background:var(--accent,#2563eb);z-index:9999;' +
+      'transition:width 0.4s ease;width:0;pointer-events:none;'
+    document.body.appendChild(progressBar)
+  }
+  progressBar.style.width = '0'
+  progressBar.style.opacity = '1'
+  // Force reflow then animate
+  void progressBar.offsetWidth
+  progressBar.style.width = '70%'
+}
+
+function hideProgress() {
+  if (!progressBar) return
+  progressBar.style.width = '100%'
+  window.setTimeout(() => {
+    if (progressBar) {
+      progressBar.style.opacity = '0'
+    }
+  }, 200)
+}
+
+// --- Auth guard ---
 let hasWaitedForAuthReady = false
 
 router.beforeEach(async () => {
+  showProgress()
+
   const auth = useAuthStore()
   if (auth.ready || hasWaitedForAuthReady) {
     return true
@@ -100,10 +126,14 @@ router.beforeEach(async () => {
     window.setTimeout(() => {
       stop()
       resolve()
-    }, 5000)
+    }, 3000)
   })
 
   return true
+})
+
+router.afterEach(() => {
+  hideProgress()
 })
 
 export default router

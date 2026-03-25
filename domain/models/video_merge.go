@@ -25,7 +25,7 @@ type VideoMerge struct {
 	Provider    string           `gorm:"type:varchar(50);not null" json:"provider"`
 	Model       *string          `gorm:"type:varchar(100)" json:"model,omitempty"`
 	Status      VideoMergeStatus `gorm:"type:varchar(20);not null;default:'pending'" json:"status"`
-	Scenes      datatypes.JSON   `gorm:"type:json;not null" json:"scenes"`
+	Scenes      datatypes.JSON   `gorm:"type:jsonb;not null" json:"scenes"`
 	MergedURL   *string          `gorm:"type:varchar(500)" json:"merged_url,omitempty"`
 	Duration    *int             `gorm:"type:int" json:"duration,omitempty"`
 	TaskID      *string          `gorm:"type:varchar(100)" json:"task_id,omitempty"`

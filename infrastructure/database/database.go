@@ -9,6 +9,7 @@ import (
 	"github.com/drama-generator/backend/domain/models"
 	"github.com/drama-generator/backend/pkg/config"
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	_ "modernc.org/sqlite"
@@ -31,15 +32,17 @@ func NewDatabase(cfg config.DatabaseConfig) (*gorm.DB, error) {
 	var db *gorm.DB
 	var err error
 
-	if cfg.Type == "sqlite" {
+	switch cfg.Type {
+	case "sqlite":
 		// 使用 modernc.org/sqlite 纯 Go 驱动（无需 CGO）
-		// 添加并发优化参数：WAL 模式、busy_timeout、cache
 		dsnWithParams := dsn + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&cache=shared"
 		db, err = gorm.Open(sqlite.Dialector{
 			DriverName: "sqlite",
 			DSN:        dsnWithParams,
 		}, gormConfig)
-	} else {
+	case "postgres":
+		db, err = gorm.Open(postgres.Open(dsn), gormConfig)
+	default:
 		db, err = gorm.Open(mysql.Open(dsn), gormConfig)
 	}
 
@@ -52,13 +55,21 @@ func NewDatabase(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to get database instance: %w", err)
 	}
 
-	// SQLite 连接池配置（限制并发连接数）
+	// 连接池配置
 	if cfg.Type == "sqlite" {
 		sqlDB.SetMaxIdleConns(1)
 		sqlDB.SetMaxOpenConns(1) // SQLite 单写入，限制为 1
 	} else {
-		sqlDB.SetMaxIdleConns(cfg.MaxIdle)
-		sqlDB.SetMaxOpenConns(cfg.MaxOpen)
+		maxIdle := cfg.MaxIdle
+		if maxIdle <= 0 {
+			maxIdle = 5
+		}
+		maxOpen := cfg.MaxOpen
+		if maxOpen <= 0 {
+			maxOpen = 20
+		}
+		sqlDB.SetMaxIdleConns(maxIdle)
+		sqlDB.SetMaxOpenConns(maxOpen)
 	}
 	sqlDB.SetConnMaxLifetime(time.Hour)
 

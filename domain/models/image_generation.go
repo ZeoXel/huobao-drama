@@ -34,7 +34,7 @@ type ImageGeneration struct {
 	ErrorMsg        *string               `gorm:"type:text" json:"error_msg,omitempty"`
 	Width           *int                  `json:"width,omitempty"`
 	Height          *int                  `json:"height,omitempty"`
-	ReferenceImages datatypes.JSON        `gorm:"type:json" json:"reference_images,omitempty"`
+	ReferenceImages datatypes.JSON        `gorm:"type:jsonb" json:"reference_images,omitempty"`
 	CreatedAt       time.Time             `json:"created_at"`
 	UpdatedAt       time.Time             `json:"updated_at"`
 	CompletedAt     *time.Time            `json:"completed_at,omitempty"`

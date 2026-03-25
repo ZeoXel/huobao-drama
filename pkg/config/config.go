@@ -31,7 +31,7 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Type     string `mapstructure:"type"` // sqlite, mysql
+	Type     string `mapstructure:"type"` // sqlite, mysql, postgres
 	Path     string `mapstructure:"path"` // SQLite数据库文件路径
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
@@ -39,6 +39,7 @@ type DatabaseConfig struct {
 	Password string `mapstructure:"password"`
 	Database string `mapstructure:"database"`
 	Charset  string `mapstructure:"charset"`
+	SSLMode  string `mapstructure:"sslmode"` // Postgres SSL 模式
 	MaxIdle  int    `mapstructure:"max_idle"`
 	MaxOpen  int    `mapstructure:"max_open"`
 }
@@ -87,6 +88,14 @@ func LoadConfig() (*Config, error) {
 func (c *DatabaseConfig) DSN() string {
 	if c.Type == "sqlite" {
 		return c.Path
+	}
+	if c.Type == "postgres" {
+		sslmode := c.SSLMode
+		if sslmode == "" {
+			sslmode = "require"
+		}
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			c.Host, c.Port, c.User, c.Password, c.Database, sslmode)
 	}
 	// MySQL DSN
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local",

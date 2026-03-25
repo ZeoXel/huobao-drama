@@ -124,6 +124,14 @@ if (isInIframe) {
     syncIframeHeight()
   })
 
+  // Sync route changes to studio so it can restore the path on refresh
+  router.afterEach((to) => {
+    window.parent.postMessage(
+      { type: 'DRAMA_ROUTE', path: to.fullPath },
+      studioTargetOrigin
+    )
+  })
+
   const rootEl = document.getElementById('app')
   if (rootEl && 'ResizeObserver' in window) {
     const observer = new ResizeObserver(() => {

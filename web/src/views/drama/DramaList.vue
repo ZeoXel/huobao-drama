@@ -33,9 +33,15 @@
         class="projects-grid"
         :class="{ 'is-empty': !loading && dramas.length === 0 }"
       >
+        <!-- Error state / 加载失败状态 -->
+        <div v-if="!loading && loadError" class="load-error-state">
+          <p class="load-error-msg">{{ loadError }}</p>
+          <el-button type="primary" size="small" @click="loadDramas">重试</el-button>
+        </div>
+
         <!-- Empty state / 空状态 -->
         <EmptyState
-          v-if="!loading && dramas.length === 0"
+          v-if="!loading && !loadError && dramas.length === 0"
           :title="$t('drama.empty')"
           :description="$t('drama.emptyHint')"
           :icon="Film"
@@ -233,14 +239,21 @@ const queryParams = ref<DramaListQuery>({
 const createDialogVisible = ref(false);
 
 // Load drama list / 加载短剧列表
+const loadError = ref('');
 const loadDramas = async () => {
   loading.value = true;
+  loadError.value = '';
   try {
     const res = await dramaAPI.list(queryParams.value);
     dramas.value = res.items || [];
     total.value = res.pagination?.total || 0;
   } catch (error: any) {
-    ElMessage.error(error.message || "加载失败");
+    const msg = error?.response?.status === 401
+      ? '认证已过期，请刷新页面'
+      : error?.response?.status >= 500
+        ? '服务暂时不可用，请稍后重试'
+        : error.message || '加载失败';
+    loadError.value = msg;
   } finally {
     loading.value = false;
   }
@@ -574,5 +587,20 @@ onMounted(() => {
 .action-button.danger:hover {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.1);
+}
+
+.load-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  grid-column: 1 / -1;
+}
+
+.load-error-msg {
+  font-size: 0.875rem;
+  color: var(--error, #ef4444);
 }
 </style>

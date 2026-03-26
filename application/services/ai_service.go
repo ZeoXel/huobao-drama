@@ -331,7 +331,8 @@ func (s *AIService) GetDefaultConfig(serviceType string) (*models.AIServiceConfi
 		return nil, err
 	}
 
-	return &config, nil
+	// 即使无 apiKey 也要走 gateway
+	return s.applyGatewayOverride(&config, ""), nil
 }
 
 func (s *AIService) GetDefaultConfigWithAPIKey(serviceType string, apiKey string) (*models.AIServiceConfig, error) {
@@ -357,7 +358,9 @@ func (s *AIService) GetConfigForModel(serviceType string, modelName string) (*mo
 	for _, config := range configs {
 		for _, model := range config.Model {
 			if model == modelName {
-				return &config, nil
+				// 即使无 apiKey 也要走 gateway
+				result := s.applyGatewayOverride(&config, "")
+				return result, nil
 			}
 		}
 	}
@@ -378,13 +381,13 @@ func (s *AIService) applyGatewayOverride(config *models.AIServiceConfig, apiKey 
 		return nil
 	}
 	cfgCopy := *config
-	trimmedAPIKey := strings.TrimSpace(apiKey)
-	if trimmedAPIKey == "" {
-		return &cfgCopy
-	}
-	cfgCopy.APIKey = trimmedAPIKey
+	// GATEWAY_URL 始终生效，所有请求统一走网关出口
 	if gatewayURL := strings.TrimSpace(os.Getenv("GATEWAY_URL")); gatewayURL != "" {
 		cfgCopy.BaseURL = gatewayURL
+	}
+	// 用户级 apiKey 覆盖配置中的 key（用户隔离）
+	if trimmedAPIKey := strings.TrimSpace(apiKey); trimmedAPIKey != "" {
+		cfgCopy.APIKey = trimmedAPIKey
 	}
 	return &cfgCopy
 }

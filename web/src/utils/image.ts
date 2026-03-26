@@ -12,22 +12,24 @@ export function fixImageUrl(url: string): string {
 }
 
 /**
- * 获取图片URL，优先使用 local_path
- * @param item 包含 local_path 或 image_url 的对象
+ * 获取图片URL，优先使用 image_url（COS/CDN 完整 URL）
+ * @param item 包含 image_url 或 local_path 的对象
  * @returns 处理后的图片URL
  */
 export function getImageUrl(item: any): string {
   if (!item) return "";
 
-  // 优先使用 local_path
-  if (item.local_path) {
-    // local_path 是相对路径（如 images/xxx.jpg），需要添加 /static/ 前缀
-    return `/static/${item.local_path}`;
-  }
-
-  // 回退到 image_url
+  // 优先使用 image_url（可能是完整的 COS/CDN URL）
   if (item.image_url) {
     return fixImageUrl(item.image_url);
+  }
+
+  // 回退到 local_path（本地存储模式）
+  if (item.local_path) {
+    if (item.local_path.startsWith("http")) {
+      return item.local_path;
+    }
+    return `/static/${item.local_path}`;
   }
 
   return "";
@@ -48,17 +50,7 @@ export function hasImage(item: any): boolean {
 export function getVideoUrl(item: any): string {
   if (!item) return "";
 
-  // 优先使用 local_path
-  if (item.local_path) {
-    // 如果 local_path 已经是完整 URL，直接返回
-    if (item.local_path.startsWith("http")) {
-      return item.local_path;
-    }
-    // 否则添加 /static/ 前缀
-    return `/static/${item.local_path}`;
-  }
-
-  // 回退到 video_url
+  // 优先使用 video_url（可能是完整的 COS/CDN URL）
   if (item.video_url) {
     return fixImageUrl(item.video_url);
   }
@@ -66,6 +58,14 @@ export function getVideoUrl(item: any): string {
   // 回退到 url（用于 assets）
   if (item.url) {
     return fixImageUrl(item.url);
+  }
+
+  // 回退到 local_path（本地存储模式）
+  if (item.local_path) {
+    if (item.local_path.startsWith("http")) {
+      return item.local_path;
+    }
+    return `/static/${item.local_path}`;
   }
 
   return "";

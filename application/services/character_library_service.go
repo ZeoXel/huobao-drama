@@ -367,7 +367,7 @@ func (s *CharacterLibraryService) GenerateCharacterImage(userID string, apiKey s
 		CharacterID: &character.ID,
 		ImageType:   imageType,
 		Prompt:      prompt,
-		Provider:    "openai",    // 或从配置读取
+		Provider:    "",          // 由 getImageClientWithModel 根据 AI 配置自动选择
 		Model:       modelName,   // 使用用户指定的模型
 		Size:        "2560x1440", // 3,686,400像素，满足API最低要求（16:9比例）
 		Quality:     "standard",

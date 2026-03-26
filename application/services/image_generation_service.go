@@ -106,7 +106,13 @@ func (s *ImageGenerationService) GenerateImage(userID string, apiKey string, req
 
 	provider := request.Provider
 	if provider == "" {
-		provider = "openai"
+		// 从数据库中获取默认图片服务配置的 provider，而非硬编码
+		defaultCfg, cfgErr := s.aiService.GetDefaultConfig("image")
+		if cfgErr == nil && defaultCfg.Provider != "" {
+			provider = defaultCfg.Provider
+		} else {
+			provider = "openai"
+		}
 	}
 
 	// 序列化参考图片
@@ -556,28 +562,7 @@ func (s *ImageGenerationService) getImageClient(provider string, apiKey string) 
 		actualProvider = provider
 	}
 
-	// 根据 provider 自动设置默认端点
-	var endpoint string
-	var queryEndpoint string
-
-	switch actualProvider {
-	case "openai", "dalle":
-		endpoint = "/images/generations"
-		return image.NewOpenAIImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
-	case "chatfire":
-		endpoint = "/images/generations"
-		return image.NewOpenAIImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
-	case "volcengine", "volces", "doubao":
-		endpoint = "/images/generations"
-		queryEndpoint = ""
-		return image.NewVolcEngineImageClient(config.BaseURL, config.APIKey, model, endpoint, queryEndpoint), nil
-	case "gemini", "google":
-		endpoint = "/v1beta/models/{model}:generateContent"
-		return image.NewGeminiImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
-	default:
-		endpoint = "/images/generations"
-		return image.NewOpenAIImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
-	}
+	return s.buildImageClient(actualProvider, config, model)
 }
 
 // getImageClientWithModel 根据模型名称获取图片客户端
@@ -614,26 +599,40 @@ func (s *ImageGenerationService) getImageClientWithModel(provider string, modelN
 		actualProvider = provider
 	}
 
-	// 根据 provider 自动设置默认端点
-	var endpoint string
-	var queryEndpoint string
+	return s.buildImageClient(actualProvider, config, model)
+}
 
-	switch actualProvider {
+// buildImageClient 根据 provider 和配置构建图片客户端
+// 优先使用配置中的 Endpoint，没有时才使用默认值
+func (s *ImageGenerationService) buildImageClient(provider string, config *models.AIServiceConfig, model string) (image.ImageClient, error) {
+	endpoint := config.Endpoint
+	queryEndpoint := config.QueryEndpoint
+
+	switch provider {
 	case "openai", "dalle":
-		endpoint = "/images/generations"
+		if endpoint == "" {
+			endpoint = "/images/generations"
+		}
 		return image.NewOpenAIImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
 	case "chatfire":
-		endpoint = "/images/generations"
+		if endpoint == "" {
+			endpoint = "/images/generations"
+		}
 		return image.NewOpenAIImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
 	case "volcengine", "volces", "doubao":
-		endpoint = "/images/generations"
-		queryEndpoint = ""
+		if endpoint == "" {
+			endpoint = "/images/generations"
+		}
 		return image.NewVolcEngineImageClient(config.BaseURL, config.APIKey, model, endpoint, queryEndpoint), nil
 	case "gemini", "google":
-		endpoint = "/v1beta/models/{model}:generateContent"
+		if endpoint == "" {
+			endpoint = "/v1beta/models/{model}:generateContent"
+		}
 		return image.NewGeminiImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
 	default:
-		endpoint = "/images/generations"
+		if endpoint == "" {
+			endpoint = "/images/generations"
+		}
 		return image.NewOpenAIImageClient(config.BaseURL, config.APIKey, model, endpoint), nil
 	}
 }

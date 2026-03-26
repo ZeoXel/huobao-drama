@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -81,14 +82,7 @@ func (c *VolcEngineImageClient) GenerateImage(prompt string, opts ...ImageOption
 		promptText += fmt.Sprintf(". Negative: %s", options.NegativePrompt)
 	}
 
-	size := options.Size
-	if size == "" {
-		if model == "doubao-seedream-4-5-251128" {
-			size = "2K"
-		} else {
-			size = "1K"
-		}
-	}
+	size := seedreamSizeForModel(model, options.Size)
 
 	reqBody := VolcEngineImageRequest{
 		Model:                     model,
@@ -155,4 +149,25 @@ func (c *VolcEngineImageClient) GenerateImage(prompt string, opts ...ImageOption
 
 func (c *VolcEngineImageClient) GetTaskStatus(taskID string) (*ImageResult, error) {
 	return nil, fmt.Errorf("not supported for VolcEngine Seedream (synchronous generation)")
+}
+
+// seedreamSizeForModel 根据模型名称返回合适的 size 参数
+// seedream API 接受 "1K"/"2K"/"3K"/"4K" 格式，不接受像素尺寸如 "2560x1440"
+func seedreamSizeForModel(model string, requestedSize string) string {
+	// 如果已经是档位格式（1K/2K/3K/4K），直接使用
+	if requestedSize == "1K" || requestedSize == "2K" || requestedSize == "3K" || requestedSize == "4K" {
+		return requestedSize
+	}
+
+	// 根据模型选择默认档位
+	switch {
+	case strings.Contains(model, "seedream-5-0"):
+		return "3K" // 5.0-lite 默认 3K 高分辨率
+	case strings.Contains(model, "seedream-4-5"):
+		return "2K" // 4.5 默认 2K
+	case strings.Contains(model, "seedream-3-0"):
+		return "1K" // 3.0 系列默认 1K
+	default:
+		return "2K"
+	}
 }

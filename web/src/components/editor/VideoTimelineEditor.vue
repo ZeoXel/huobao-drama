@@ -2033,6 +2033,7 @@ defineExpose({
   .editor-workspace {
     display: flex;
     flex: 1;
+    min-height: 500px; // 确保最小高度
     overflow: hidden;
 
     .preview-panel {
@@ -2276,6 +2277,7 @@ defineExpose({
 
     .media-library {
       flex: 1;
+      min-width: 300px; // 确保素材库有最小宽度
       display: flex;
       flex-direction: column;
       background: var(--bg-card);

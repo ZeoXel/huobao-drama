@@ -5144,10 +5144,11 @@ onBeforeUnmount(() => {
 
     .timeline-area {
       flex: 1;
+      min-height: 800px; // 确保时间线区域有足够高度显示所有内容
       display: flex;
       flex-direction: column;
       background: var(--bg-secondary);
-      overflow: hidden;
+      overflow: auto; // 改为 auto，允许滚动
 
       .empty-timeline {
         flex: 1;

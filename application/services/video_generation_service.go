@@ -651,8 +651,9 @@ func (s *VideoGenerationService) getVideoClient(provider string, modelName strin
 		queryEndpoint = "/video/task/{taskId}"
 		return video.NewChatfireClient(baseURL, configAPIKey, model, endpoint, queryEndpoint), nil
 	case "doubao", "volcengine", "volces":
-		endpoint = "/contents/generations/tasks"
-		queryEndpoint = "/contents/generations/tasks/{taskId}"
+		// 使用网关标准端点，与 Studio 项目保持一致
+		endpoint = "/v1/video/generations"
+		queryEndpoint = "/v1/video/generations/{taskId}"
 		return video.NewVolcesArkClient(baseURL, configAPIKey, model, endpoint, queryEndpoint), nil
 	case "openai":
 		// OpenAI Sora 使用 /v1/videos 端点

@@ -377,12 +377,14 @@ func (s *VideoMergeService) getVideoClient(provider string, apiKey string) (vide
 		queryEndpoint = "/video/task/{taskId}"
 		return video.NewChatfireClient(config.BaseURL, config.APIKey, model, endpoint, queryEndpoint), nil
 	case "doubao", "volces", "ark":
-		endpoint = "/contents/generations/tasks"
-		queryEndpoint = "/generations/tasks/{taskId}"
+		// 使用网关标准端点，与 Studio 项目保持一致
+		endpoint = "/v1/video/generations"
+		queryEndpoint = "/v1/video/generations/{taskId}"
 		return video.NewVolcesArkClient(config.BaseURL, config.APIKey, model, endpoint, queryEndpoint), nil
 	default:
-		endpoint = "/contents/generations/tasks"
-		queryEndpoint = "/generations/tasks/{taskId}"
+		// 默认使用网关标准端点
+		endpoint = "/v1/video/generations"
+		queryEndpoint = "/v1/video/generations/{taskId}"
 		return video.NewVolcesArkClient(config.BaseURL, config.APIKey, model, endpoint, queryEndpoint), nil
 	}
 }

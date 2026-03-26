@@ -356,15 +356,15 @@ func (c *VolcesArkClient) GetTaskStatus(taskID string) (*VideoResult, error) {
 	}
 
 	// 兼容网关格式（task_id）和 Ark 格式（id）
-	taskID := result.TaskID
-	if taskID == "" {
-		taskID = result.ID
+	resultTaskID := result.TaskID
+	if resultTaskID == "" {
+		resultTaskID = result.ID
 	}
 
-	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", taskID, result.Status, result.Content.VideoURL)
+	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", resultTaskID, result.Status, result.Content.VideoURL)
 
 	videoResult := &VideoResult{
-		TaskID:    taskID,
+		TaskID:    resultTaskID,
 		Status:    result.Status,
 		Completed: result.Status == "completed" || result.Status == "succeeded",
 		Duration:  result.Duration,

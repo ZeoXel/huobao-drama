@@ -104,7 +104,9 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 	}
 
 	// 检测使用网关端点还是 Ark 端点
-	useGatewayFormat := strings.Contains(c.Endpoint, "/v1/video/")
+	// 网关格式：/video/generations 或 /v1/video/generations
+	// Ark 格式：/api/v3/contents/generations/tasks
+	useGatewayFormat := strings.Contains(c.Endpoint, "/video/generations")
 
 	// 构建prompt文本
 	// 注意：网关格式不需要在 prompt 中附加参数

@@ -289,9 +289,23 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 	}
 
 	// 兼容网关格式（task_id）和 Ark 格式（id）
+	// 同时处理响应可能嵌套在 data 字段中的情况
 	taskID := result.TaskID
 	if taskID == "" {
 		taskID = result.ID
+	}
+	// 如果还是空，尝试从嵌套的 data 中提取
+	if taskID == "" {
+		var rawResponse map[string]interface{}
+		if err := json.Unmarshal(body, &rawResponse); err == nil {
+			if data, ok := rawResponse["data"].(map[string]interface{}); ok {
+				if tid, ok := data["task_id"].(string); ok && tid != "" {
+					taskID = tid
+				} else if id, ok := data["id"].(string); ok && id != "" {
+					taskID = id
+				}
+			}
+		}
 	}
 
 	fmt.Printf("[VolcesARK] Video generation initiated - TaskID: %s, Status: %s\n", taskID, result.Status)
@@ -356,9 +370,23 @@ func (c *VolcesArkClient) GetTaskStatus(taskID string) (*VideoResult, error) {
 	}
 
 	// 兼容网关格式（task_id）和 Ark 格式（id）
+	// 同时处理响应可能嵌套在 data 字段中的情况
 	resultTaskID := result.TaskID
 	if resultTaskID == "" {
 		resultTaskID = result.ID
+	}
+	// 如果还是空，尝试从嵌套的 data 中提取
+	if resultTaskID == "" {
+		var rawResponse map[string]interface{}
+		if err := json.Unmarshal(body, &rawResponse); err == nil {
+			if data, ok := rawResponse["data"].(map[string]interface{}); ok {
+				if tid, ok := data["task_id"].(string); ok && tid != "" {
+					resultTaskID = tid
+				} else if id, ok := data["id"].(string); ok && id != "" {
+					resultTaskID = id
+				}
+			}
+		}
 	}
 
 	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", resultTaskID, result.Status, result.Content.VideoURL)

@@ -12,6 +12,12 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3012,
+    cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, X-User-ID'
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:5678',

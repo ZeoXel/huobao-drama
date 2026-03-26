@@ -61,7 +61,7 @@ func (h *SceneHandler) GenerateSceneImage(c *gin.Context) {
 		return
 	}
 
-	imageGen, err := h.sceneService.GenerateSceneImage(&req)
+	imageGen, err := h.sceneService.GenerateSceneImage(&req, currentAPIKey(c))
 	if err != nil {
 		h.log.Errorw("Failed to generate scene image", "error", err)
 		response.InternalError(c, err.Error())

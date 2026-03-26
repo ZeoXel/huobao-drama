@@ -353,7 +353,7 @@ type GenerateSceneImageRequest struct {
 	Model   string `json:"model"`
 }
 
-func (s *StoryboardCompositionService) GenerateSceneImage(req *GenerateSceneImageRequest) (*models.ImageGeneration, error) {
+func (s *StoryboardCompositionService) GenerateSceneImage(req *GenerateSceneImageRequest, apiKey string) (*models.ImageGeneration, error) {
 	// 获取场景并验证权限
 	var scene models.Scene
 	err := s.db.Where("id = ?", req.SceneID).First(&scene).Error
@@ -390,7 +390,7 @@ func (s *StoryboardCompositionService) GenerateSceneImage(req *GenerateSceneImag
 			Size:      "2560x1440", // 3,686,400像素，满足doubao模型最低要求（16:9比例）
 			Quality:   "standard",
 		}
-		imageGen, err := s.imageGen.GenerateImage(drama.UserID, "", genReq)
+		imageGen, err := s.imageGen.GenerateImage(drama.UserID, apiKey, genReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate image: %w", err)
 		}

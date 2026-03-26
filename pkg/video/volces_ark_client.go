@@ -27,16 +27,27 @@ type VolcesArkContent struct {
 	Role     string                 `json:"role,omitempty"`
 }
 
+// Ark 原生格式（直连火山引擎）
 type VolcesArkRequest struct {
 	Model         string             `json:"model"`
 	Content       []VolcesArkContent `json:"content"`
 	GenerateAudio bool               `json:"generate_audio,omitempty"`
 }
 
+// 网关格式（与 Studio 项目一致）
+type GatewayVideoRequest struct {
+	Model    string                 `json:"model"`
+	Prompt   string                 `json:"prompt"`
+	Images   []string               `json:"images,omitempty"`
+	Duration int                    `json:"duration,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
 type VolcesArkResponse struct {
-	ID      string `json:"id"`
-	Model   string `json:"model"`
-	Status  string `json:"status"`
+	ID     string `json:"id"`      // Ark 格式
+	TaskID string `json:"task_id"` // 网关格式
+	Model  string `json:"model"`
+	Status string `json:"status"`
 	Content struct {
 		VideoURL string `json:"video_url"`
 	} `json:"content"`
@@ -92,13 +103,20 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 		model = options.Model
 	}
 
-	// 构建prompt文本（包含duration和ratio参数）
+	// 检测使用网关端点还是 Ark 端点
+	useGatewayFormat := strings.Contains(c.Endpoint, "/v1/video/")
+
+	// 构建prompt文本
+	// 注意：网关格式不需要在 prompt 中附加参数
 	promptText := prompt
-	if options.AspectRatio != "" {
-		promptText += fmt.Sprintf("  --ratio %s", options.AspectRatio)
-	}
-	if options.Duration > 0 {
-		promptText += fmt.Sprintf("  --dur %d", options.Duration)
+	if !useGatewayFormat {
+		// Ark 原生格式：在 prompt 中附加参数
+		if options.AspectRatio != "" {
+			promptText += fmt.Sprintf("  --ratio %s", options.AspectRatio)
+		}
+		if options.Duration > 0 {
+			promptText += fmt.Sprintf("  --dur %d", options.Duration)
+		}
 	}
 
 	content := []VolcesArkContent{
@@ -162,15 +180,78 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 		generateAudio = true
 	}
 
-	reqBody := VolcesArkRequest{
-		Model:         model,
-		Content:       content,
-		GenerateAudio: generateAudio,
-	}
+	var jsonData []byte
+	var err error
 
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+	if useGatewayFormat {
+		// 网关格式：使用 prompt + images + metadata
+		images := []string{}
+		imageRoles := []string{}
+
+		// 收集所有图片和角色
+		if len(options.ReferenceImageURLs) > 0 {
+			images = options.ReferenceImageURLs
+			for range options.ReferenceImageURLs {
+				imageRoles = append(imageRoles, "reference_image")
+			}
+		} else if options.FirstFrameURL != "" && options.LastFrameURL != "" {
+			images = []string{options.FirstFrameURL, options.LastFrameURL}
+			imageRoles = []string{"first_frame", "last_frame"}
+		} else if imageURL != "" {
+			images = []string{imageURL}
+			imageRoles = []string{"first_frame"}
+		} else if options.FirstFrameURL != "" {
+			images = []string{options.FirstFrameURL}
+			imageRoles = []string{"first_frame"}
+		}
+
+		// 构建 metadata（Seedance 特有参数）
+		metadata := map[string]interface{}{}
+		if len(imageRoles) > 0 {
+			metadata["image_roles"] = imageRoles
+		}
+		if generateAudio {
+			metadata["generate_audio"] = generateAudio
+		}
+		if options.AspectRatio != "" {
+			metadata["ratio"] = options.AspectRatio
+		}
+		if options.Resolution != "" {
+			metadata["resolution"] = options.Resolution
+		}
+		if options.Seed != 0 {
+			metadata["seed"] = options.Seed
+		}
+
+		gatewayReq := GatewayVideoRequest{
+			Model:    model,
+			Prompt:   prompt, // 不带参数的原始 prompt
+			Duration: options.Duration,
+		}
+		if len(images) > 0 {
+			gatewayReq.Images = images
+		}
+		if len(metadata) > 0 {
+			gatewayReq.Metadata = metadata
+		}
+
+		jsonData, err = json.Marshal(gatewayReq)
+		if err != nil {
+			return nil, fmt.Errorf("marshal gateway request: %w", err)
+		}
+		fmt.Printf("[VolcesARK] Using Gateway format\n")
+	} else {
+		// Ark 原生格式
+		reqBody := VolcesArkRequest{
+			Model:         model,
+			Content:       content,
+			GenerateAudio: generateAudio,
+		}
+		jsonData, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("marshal ark request: %w", err)
+		}
+		fmt.Printf("[VolcesARK] Using Ark native format\n")
 	}
 
 	endpoint := c.BaseURL + c.Endpoint
@@ -207,7 +288,13 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
-	fmt.Printf("[VolcesARK] Video generation initiated - TaskID: %s, Status: %s\n", result.ID, result.Status)
+	// 兼容网关格式（task_id）和 Ark 格式（id）
+	taskID := result.TaskID
+	if taskID == "" {
+		taskID = result.ID
+	}
+
+	fmt.Printf("[VolcesARK] Video generation initiated - TaskID: %s, Status: %s\n", taskID, result.Status)
 
 	if result.Error != nil {
 		errorMsg := fmt.Sprintf("%v", result.Error)
@@ -215,7 +302,7 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 	}
 
 	videoResult := &VideoResult{
-		TaskID:    result.ID,
+		TaskID:    taskID,
 		Status:    result.Status,
 		Completed: result.Status == "completed" || result.Status == "succeeded",
 		Duration:  result.Duration,
@@ -268,10 +355,16 @@ func (c *VolcesArkClient) GetTaskStatus(taskID string) (*VideoResult, error) {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
-	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", result.ID, result.Status, result.Content.VideoURL)
+	// 兼容网关格式（task_id）和 Ark 格式（id）
+	taskID := result.TaskID
+	if taskID == "" {
+		taskID = result.ID
+	}
+
+	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", taskID, result.Status, result.Content.VideoURL)
 
 	videoResult := &VideoResult{
-		TaskID:    result.ID,
+		TaskID:    taskID,
 		Status:    result.Status,
 		Completed: result.Status == "completed" || result.Status == "succeeded",
 		Duration:  result.Duration,

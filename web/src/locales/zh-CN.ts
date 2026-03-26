@@ -470,7 +470,7 @@ export default {
     durationSeconds: '时长(秒)',
     emptyLibrary: '角色库为空，请先生成或上传角色图片',
     textModelTip: '用于生成章节内容、角色、场景等文本',
-    uploadFormatTip: '支持 jpg/png 格式，文件大小不超过 10MB',
+    uploadFormatTip: '支持 jpg/png 格式，文件大小不超过 20MB',
     aiModelConfig: 'AI模型配置',
     textGenModel: '文本生成模型',
     imageGenModel: '图片生成模型',

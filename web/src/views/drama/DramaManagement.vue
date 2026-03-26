@@ -1021,15 +1021,15 @@ const handleSceneImageSuccess = (response: any) => {
 
 const beforeAvatarUpload = (file: any) => {
   const isImage = file.type.startsWith("image/");
-  const isLt10M = file.size / 1024 / 1024 < 10;
+  const isLt20M = file.size / 1024 / 1024 < 20;
 
   if (!isImage) {
     ElMessage.error("只能上传图片文件!");
   }
-  if (!isLt10M) {
-    ElMessage.error("图片大小不能超过 10MB!");
+  if (!isLt20M) {
+    ElMessage.error("图片大小不能超过 20MB!");
   }
-  return isImage && isLt10M;
+  return isImage && isLt20M;
 };
 
 const generateCharacterImage = async (character: any) => {

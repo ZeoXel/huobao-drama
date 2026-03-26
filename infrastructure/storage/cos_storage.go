@@ -20,6 +20,7 @@ import (
 type COSStorage struct {
 	client    *coslib.Client
 	localPath string
+	publicURL string // CDN/自定义域名，用于生成访问 URL
 }
 
 func NewCOSStorage(cfg *config.StorageConfig) (*COSStorage, error) {
@@ -34,7 +35,11 @@ func NewCOSStorage(cfg *config.StorageConfig) (*COSStorage, error) {
 	if err := os.MkdirAll(localPath, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create local cache dir: %w", err)
 	}
-	return &COSStorage{client: client, localPath: localPath}, nil
+	return &COSStorage{
+		client:    client,
+		localPath: localPath,
+		publicURL: cospkg.PublicURL(cfg),
+	}, nil
 }
 
 func (s *COSStorage) Save(ctx context.Context, key string, data []byte, contentType string) (string, error) {
@@ -76,6 +81,11 @@ func (s *COSStorage) GetURL(ctx context.Context, key string) (string, error) {
 	if cleanKey == "" {
 		return "", fmt.Errorf("empty storage key")
 	}
+	// 如果配置了 CDN/自定义域名，直接拼接公开访问 URL
+	if s.publicURL != "" {
+		return fmt.Sprintf("%s/%s", s.publicURL, cleanKey), nil
+	}
+	// 否则生成签名 URL
 	presigned, err := s.client.Object.GetPresignedURL(ctx, http.MethodGet, cleanKey, "", "", time.Hour, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create cos signed url: %w", err)

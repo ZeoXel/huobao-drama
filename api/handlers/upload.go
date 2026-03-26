@@ -59,8 +59,8 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 	}
 
 	// 检查文件大小 (10MB)
-	if header.Size > 10*1024*1024 {
-		response.BadRequest(c, "文件大小不能超过10MB")
+	if header.Size > 20*1024*1024 {
+		response.BadRequest(c, "文件大小不能超过20MB")
 		return
 	}
 
@@ -113,8 +113,8 @@ func (h *UploadHandler) UploadCharacterImage(c *gin.Context) {
 	}
 
 	// 检查文件大小 (10MB)
-	if header.Size > 10*1024*1024 {
-		response.BadRequest(c, "文件大小不能超过10MB")
+	if header.Size > 20*1024*1024 {
+		response.BadRequest(c, "文件大小不能超过20MB")
 		return
 	}
 

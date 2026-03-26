@@ -554,7 +554,7 @@ export default {
     durationSeconds: 'Duration (seconds)',
     emptyLibrary: 'Character library is empty, please generate or upload character images first',
     textModelTip: 'Used to generate episode content, characters, scenes and other text',
-    uploadFormatTip: 'Supports jpg/png formats, file size should not exceed 10MB',
+    uploadFormatTip: 'Supports jpg/png formats, file size should not exceed 20MB',
     aiModelConfig: 'AI Model Configuration',
     textGenModel: 'Text Generation Model',
     imageGenModel: 'Image Generation Model',

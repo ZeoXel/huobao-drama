@@ -3755,9 +3755,9 @@ const uploadImage = () => {
     const file = target.files?.[0];
     if (!file) return;
 
-    // 验证文件大小 (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      ElMessage.error("图片大小不能超过 10MB");
+    // 验证文件大小 (20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      ElMessage.error("图片大小不能超过 20MB");
       return;
     }
 

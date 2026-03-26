@@ -2324,14 +2324,14 @@ const handleSceneImageSuccess = (response: any) => {
 // 图片上传前的校验
 const beforeAvatarUpload = (file: File) => {
   const isImage = file.type.startsWith("image/");
-  const isLt10M = file.size / 1024 / 1024 < 10;
+  const isLt20M = file.size / 1024 / 1024 < 20;
 
   if (!isImage) {
     ElMessage.error("只能上传图片文件!");
     return false;
   }
-  if (!isLt10M) {
-    ElMessage.error("图片大小不能超过 10MB!");
+  if (!isLt20M) {
+    ElMessage.error("图片大小不能超过 20MB!");
     return false;
   }
   return true;

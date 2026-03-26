@@ -1418,8 +1418,8 @@ const openUploadDialog = (character: any) => {
     if (!file) return;
 
     // 验证文件大小（10MB）
-    if (file.size > 10 * 1024 * 1024) {
-      ElMessage.error("图片大小不能超过10MB");
+    if (file.size > 20 * 1024 * 1024) {
+      ElMessage.error("图片大小不能超过20MB");
       return;
     }
 

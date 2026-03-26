@@ -292,10 +292,20 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 	if err := json.Unmarshal(body, &rawResponse); err == nil {
 		// 如果响应包含 data 字段，优先从 data 中解析
 		if data, ok := rawResponse["data"].(map[string]interface{}); ok {
-			// 将 data 字段重新序列化后解析到 result
-			if dataBytes, err := json.Marshal(data); err == nil {
-				if err := json.Unmarshal(dataBytes, &result); err != nil {
-					return nil, fmt.Errorf("parse data response: %w", err)
+			// 检查是否有嵌套的 data.data（网关可能返回双层嵌套）
+			if innerData, ok := data["data"].(map[string]interface{}); ok {
+				// 使用内层 data
+				if dataBytes, err := json.Marshal(innerData); err == nil {
+					if err := json.Unmarshal(dataBytes, &result); err != nil {
+						return nil, fmt.Errorf("parse inner data response: %w", err)
+					}
+				}
+			} else {
+				// 只有一层 data
+				if dataBytes, err := json.Marshal(data); err == nil {
+					if err := json.Unmarshal(dataBytes, &result); err != nil {
+						return nil, fmt.Errorf("parse data response: %w", err)
+					}
 				}
 			}
 		} else {
@@ -321,10 +331,13 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 		return nil, fmt.Errorf("volces error: %s", errorMsg)
 	}
 
+	// 标准化状态为小写
+	status := strings.ToLower(result.Status)
+
 	videoResult := &VideoResult{
 		TaskID:    taskID,
-		Status:    result.Status,
-		Completed: result.Status == "completed" || result.Status == "succeeded",
+		Status:    status,
+		Completed: status == "completed" || status == "succeeded" || status == "success",
 		Duration:  result.Duration,
 	}
 
@@ -377,10 +390,20 @@ func (c *VolcesArkClient) GetTaskStatus(taskID string) (*VideoResult, error) {
 	if err := json.Unmarshal(body, &rawResponse); err == nil {
 		// 如果响应包含 data 字段，优先从 data 中解析
 		if data, ok := rawResponse["data"].(map[string]interface{}); ok {
-			// 将 data 字段重新序列化后解析到 result
-			if dataBytes, err := json.Marshal(data); err == nil {
-				if err := json.Unmarshal(dataBytes, &result); err != nil {
-					return nil, fmt.Errorf("parse data response: %w", err)
+			// 检查是否有嵌套的 data.data（网关可能返回双层嵌套）
+			if innerData, ok := data["data"].(map[string]interface{}); ok {
+				// 使用内层 data
+				if dataBytes, err := json.Marshal(innerData); err == nil {
+					if err := json.Unmarshal(dataBytes, &result); err != nil {
+						return nil, fmt.Errorf("parse inner data response: %w", err)
+					}
+				}
+			} else {
+				// 只有一层 data
+				if dataBytes, err := json.Marshal(data); err == nil {
+					if err := json.Unmarshal(dataBytes, &result); err != nil {
+						return nil, fmt.Errorf("parse data response: %w", err)
+					}
 				}
 			}
 		} else {
@@ -401,10 +424,13 @@ func (c *VolcesArkClient) GetTaskStatus(taskID string) (*VideoResult, error) {
 
 	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", resultTaskID, result.Status, result.Content.VideoURL)
 
+	// 标准化状态为小写
+	status := strings.ToLower(result.Status)
+
 	videoResult := &VideoResult{
 		TaskID:    resultTaskID,
-		Status:    result.Status,
-		Completed: result.Status == "completed" || result.Status == "succeeded",
+		Status:    status,
+		Completed: status == "completed" || status == "succeeded" || status == "success",
 		Duration:  result.Duration,
 	}
 

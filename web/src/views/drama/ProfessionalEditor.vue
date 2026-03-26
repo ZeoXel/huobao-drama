@@ -2245,19 +2245,54 @@ const defaultModelCapabilities: Record<
     supportTextOnly: true,
     maxImages: 2,
   },
-  "MiniMax-Hailuo-2.3": {
+  "viduq3-pro": {
+    supportSingleImage: true,
+    supportMultipleImages: true,
+    supportFirstLastFrame: true,
+    supportTextOnly: true,
+    maxImages: 7,
+  },
+  "viduq2-pro": {
+    supportSingleImage: true,
+    supportMultipleImages: true,
+    supportFirstLastFrame: true,
+    supportTextOnly: true,
+    maxImages: 7,
+  },
+  "viduq2-turbo": {
     supportSingleImage: true,
     supportMultipleImages: false,
     supportFirstLastFrame: false,
     supportTextOnly: true,
     maxImages: 1,
   },
-  "MiniMax-Hailuo-2.3-Fast": {
-    supportSingleImage: true,
+  "veo3.1": {
+    supportSingleImage: false,
     supportMultipleImages: false,
     supportFirstLastFrame: false,
     supportTextOnly: true,
-    maxImages: 1,
+    maxImages: 0,
+  },
+  "veo3.1-pro": {
+    supportSingleImage: false,
+    supportMultipleImages: false,
+    supportFirstLastFrame: false,
+    supportTextOnly: true,
+    maxImages: 0,
+  },
+  "kling-v3": {
+    supportSingleImage: true,
+    supportMultipleImages: true,
+    supportFirstLastFrame: true,
+    supportTextOnly: true,
+    maxImages: 7,
+  },
+  "kling-v2-6": {
+    supportSingleImage: true,
+    supportMultipleImages: false,
+    supportFirstLastFrame: true,
+    supportTextOnly: true,
+    maxImages: 2,
   },
   "MiniMax-Hailuo-02": {
     supportSingleImage: true,

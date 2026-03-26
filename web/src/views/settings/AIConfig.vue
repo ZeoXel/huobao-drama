@@ -255,6 +255,7 @@ const providerConfigs: Record<AIServiceType, ProviderConfig[]> = {
         "doubao-seedream-5-0-260128",
         "doubao-seedream-4-5-251128",
         "doubao-seedream-3-0-t2i-250415",
+        "doubao-seededit-3-0-i2i-250628",
       ],
     },
     {
@@ -263,7 +264,8 @@ const providerConfigs: Record<AIServiceType, ProviderConfig[]> = {
       models: [
         "doubao-seedream-5-0-260128",
         "doubao-seedream-4-5-251128",
-        "nano-banana-pro",
+        "nano-banana",
+        "nano-banana-2",
       ],
     },
     {
@@ -271,32 +273,17 @@ const providerConfigs: Record<AIServiceType, ProviderConfig[]> = {
       name: "Google Gemini",
       models: ["gemini-3-pro-image-preview"],
     },
-    { id: "openai", name: "OpenAI", models: ["dall-e-3", "dall-e-2"] },
   ],
   video: [
     {
       id: "volces",
       name: "火山引擎",
-      models: [
-        "doubao-seedance-1-5-pro-251215",
-        "doubao-seedance-1-0-lite-i2v-250428",
-        "doubao-seedance-1-0-lite-t2v-250428",
-        "doubao-seedance-1-0-pro-250528",
-        "doubao-seedance-1-0-pro-fast-251015",
-      ],
+      models: ["doubao-seedance-1-5-pro-251215"],
     },
     {
       id: "chatfire",
       name: "Chatfire",
-      models: [
-        "doubao-seedance-1-5-pro-251215",
-        "doubao-seedance-1-0-lite-i2v-250428",
-        "doubao-seedance-1-0-lite-t2v-250428",
-        "doubao-seedance-1-0-pro-250528",
-        "doubao-seedance-1-0-pro-fast-251015",
-        "sora-2",
-        "sora-2-pro",
-      ],
+      models: ["doubao-seedance-1-5-pro-251215"],
     },
     { id: "openai", name: "OpenAI", models: ["sora-2", "sora-2-pro"] },
     //    { id: 'minimax', name: 'MiniMax', models: ['MiniMax-Hailuo-2.3', 'MiniMax-Hailuo-2.3-Fast', 'MiniMax-Hailuo-02'] }

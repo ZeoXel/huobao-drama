@@ -58,6 +58,11 @@ if (isInIframe) {
   document.documentElement.classList.add('iframe-mode')
   document.body.classList.add('iframe-mode')
 
+  // Try instant restore from sessionStorage so the app is ready immediately
+  // without waiting for a STUDIO_AUTH postMessage round-trip.
+  // Fresh STUDIO_AUTH / STUDIO_AUTH_REFRESH messages will overwrite the cache.
+  authStore.restoreFromCache()
+
   // Register listener before sending DRAMA_READY to avoid race conditions.
   window.addEventListener('message', (event) => {
     const msgType = event.data?.type

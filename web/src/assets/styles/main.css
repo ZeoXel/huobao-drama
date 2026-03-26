@@ -227,9 +227,10 @@ html.iframe-mode pre {
   font-family: 'Geist Mono', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
-/* --- Slim down AppHeader in iframe (keep back button + title, hide redundant chrome) --- */
+/* --- Slim down AppHeader in iframe (hide logo + redundant chrome, keep action buttons) --- */
 html.iframe-mode .app-header .logo,
-html.iframe-mode .app-header .header-right {
+html.iframe-mode .app-header .header-right .language-switcher,
+html.iframe-mode .app-header .header-right .theme-toggle {
   display: none !important;
 }
 

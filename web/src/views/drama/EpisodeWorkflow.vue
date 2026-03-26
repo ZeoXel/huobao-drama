@@ -42,15 +42,7 @@
             </div>
           </div>
         </template>
-        <template #right>
-          <el-button
-            :icon="Setting"
-            @click="showModelConfigDialog"
-            :title="$t('workflow.modelConfig')"
-          >
-            图文配置
-          </el-button>
-        </template>
+        <!-- AI config is handled by AppHeader's built-in button -->
       </AppHeader>
 
       <div class="content-container">
@@ -1016,60 +1008,7 @@
         </div>
       </el-dialog>
 
-      <!-- AI模型配置对话框 -->
-      <el-dialog
-        v-model="modelConfigDialogVisible"
-        :title="$t('workflow.aiModelConfig')"
-        width="600px"
-        :close-on-click-modal="false"
-      >
-        <el-form label-width="120px">
-          <el-form-item :label="$t('workflow.textGenModel')">
-            <el-select
-              v-model="selectedTextModel"
-              :placeholder="$t('workflow.selectTextModel')"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="model in textModels"
-                :key="model.modelName"
-                :label="model.modelName"
-                :value="model.modelName"
-              />
-            </el-select>
-            <div class="model-tip">
-              {{ $t("workflow.textModelTip") }}
-            </div>
-          </el-form-item>
-
-          <el-form-item :label="$t('workflow.imageGenModel')">
-            <el-select
-              v-model="selectedImageModel"
-              :placeholder="$t('workflow.selectImageModel')"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="model in imageModels"
-                :key="model.modelName"
-                :label="model.modelName"
-                :value="model.modelName"
-              />
-            </el-select>
-            <div class="model-tip">
-              {{ $t("workflow.modelConfigTip") }}
-            </div>
-          </el-form-item>
-        </el-form>
-
-        <template #footer>
-          <el-button @click="modelConfigDialogVisible = false">{{
-            $t("common.cancel")
-          }}</el-button>
-          <el-button type="primary" @click="saveModelConfig">{{
-            $t("common.saveConfig")
-          }}</el-button>
-        </template>
-      </el-dialog>
+      <!-- AI model config is now handled by AppHeader's AIConfigDialog -->
 
       <!-- 图片上传对话框 -->
       <el-dialog
@@ -1218,7 +1157,6 @@ import {
   Upload,
   Delete,
   FolderAdd,
-  Setting,
   Loading,
   WarningFilled,
   Document,
@@ -1270,7 +1208,7 @@ const selectAllScenes = ref(false);
 const promptDialogVisible = ref(false);
 const libraryDialogVisible = ref(false);
 const uploadDialogVisible = ref(false);
-const modelConfigDialogVisible = ref(false);
+// modelConfigDialogVisible removed — AI config is in AppHeader
 const addSceneDialogVisible = ref(false);
 const extractScenesDialogVisible = ref(false);
 const currentEditItem = ref<any>({ name: "" });
@@ -1495,26 +1433,7 @@ const loadAIConfigs = async () => {
   }
 };
 
-// 显示模型配置对话框
-const showModelConfigDialog = () => {
-  modelConfigDialogVisible.value = true;
-  loadAIConfigs();
-};
-
-// 保存模型配置
-const saveModelConfig = () => {
-  if (!selectedTextModel.value || !selectedImageModel.value) {
-    ElMessage.warning($t("workflow.pleaseSelectModels"));
-    return;
-  }
-
-  // 保存模型名称到localStorage
-  localStorage.setItem(`ai_text_model_${dramaId}`, selectedTextModel.value);
-  localStorage.setItem(`ai_image_model_${dramaId}`, selectedImageModel.value);
-
-  ElMessage.success($t("workflow.modelConfigSaved"));
-  modelConfigDialogVisible.value = false;
-};
+// Model config dialog and save are now handled by AppHeader's AIConfigDialog
 
 const nextStep = () => {
   if (currentStep.value < 3) {
@@ -1528,10 +1447,14 @@ const prevStep = () => {
   }
 };
 
-// 从localStorage加载已保存的模型配置
+// Load saved model config: per-drama key first, then global key from AIConfigDialog
 const loadSavedModelConfig = () => {
-  const savedTextModel = localStorage.getItem(`ai_text_model_${dramaId}`);
-  const savedImageModel = localStorage.getItem(`ai_image_model_${dramaId}`);
+  const savedTextModel =
+    localStorage.getItem(`ai_text_model_${dramaId}`) ||
+    localStorage.getItem('ai_selected_text_model');
+  const savedImageModel =
+    localStorage.getItem(`ai_image_model_${dramaId}`) ||
+    localStorage.getItem('ai_selected_image_model');
 
   if (savedTextModel) {
     selectedTextModel.value = savedTextModel;

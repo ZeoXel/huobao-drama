@@ -26,11 +26,10 @@
           <ThemeToggle v-if="showTheme" />
           
           <!-- AI Config (Model Switch) | AI 配置（模型切换） -->
-          <!-- AI 配置已通过环境变量自动初始化，隐藏配置按钮 -->
-          <!-- <el-button v-if="showAIConfig" @click="handleOpenAIConfig" class="header-btn">
+          <el-button v-if="showAIConfig" @click="handleOpenAIConfig" class="header-btn">
             <el-icon><Setting /></el-icon>
             <span class="btn-text">{{ $t('drama.aiConfig') }}</span>
-          </el-button> -->
+          </el-button>
           <!-- Right slot for business content (before actions) | 右侧插槽（在操作按钮前） -->
           <slot name="right" />
         </div>

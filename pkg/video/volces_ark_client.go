@@ -331,13 +331,15 @@ func (c *VolcesArkClient) GenerateVideo(imageURL, prompt string, opts ...VideoOp
 		return nil, fmt.Errorf("volces error: %s", errorMsg)
 	}
 
-	// 标准化状态为小写
-	status := strings.ToLower(result.Status)
+	// 标准化状态为小写，支持多种完成状态
+	statusUpper := strings.ToUpper(result.Status)
+	completed := (statusUpper == "COMPLETED" || statusUpper == "SUCCEEDED" ||
+	              statusUpper == "SUCCESS" || statusUpper == "DONE")
 
 	videoResult := &VideoResult{
 		TaskID:    taskID,
-		Status:    status,
-		Completed: status == "completed" || status == "succeeded" || status == "success",
+		Status:    strings.ToLower(result.Status),
+		Completed: completed,
 		Duration:  result.Duration,
 	}
 
@@ -424,13 +426,15 @@ func (c *VolcesArkClient) GetTaskStatus(taskID string) (*VideoResult, error) {
 
 	fmt.Printf("[VolcesARK] Parsed result - ID: %s, Status: %s, VideoURL: %s\n", resultTaskID, result.Status, result.Content.VideoURL)
 
-	// 标准化状态为小写
-	status := strings.ToLower(result.Status)
+	// 标准化状态为小写，支持多种完成状态
+	statusUpper := strings.ToUpper(result.Status)
+	completed := (statusUpper == "COMPLETED" || statusUpper == "SUCCEEDED" ||
+	              statusUpper == "SUCCESS" || statusUpper == "DONE")
 
 	videoResult := &VideoResult{
 		TaskID:    resultTaskID,
-		Status:    status,
-		Completed: status == "completed" || status == "succeeded" || status == "success",
+		Status:    strings.ToLower(result.Status),
+		Completed: completed,
 		Duration:  result.Duration,
 	}
 

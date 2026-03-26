@@ -824,6 +824,23 @@ func (s *VideoGenerationService) convertImageToBase64(imageURL string) (string, 
 		return imageURL, nil
 	}
 
+	// 尝试从COS存储读取（优先级最高）
+	if s.storageService != nil && !strings.HasPrefix(imageURL, "http://") && !strings.HasPrefix(imageURL, "https://") {
+		// 看起来像 COS key（不是 HTTP URL）
+		localPath, cleanup, err := s.storageService.GetLocalPath(context.Background(), imageURL)
+		if err == nil && localPath != "" {
+			defer cleanup() // 确保清理临时文件
+
+			// 从本地临时文件转换为 base64
+			base64Str, err := utils.ImageToBase64(localPath)
+			if err == nil {
+				s.log.Infow("Converted COS image to base64", "key", imageURL)
+				return base64Str, nil
+			}
+			s.log.Warnw("Failed to convert COS image to base64", "error", err, "key", imageURL)
+		}
+	}
+
 	// 尝试从本地存储读取
 	if s.localStorage != nil {
 		var relativePath string

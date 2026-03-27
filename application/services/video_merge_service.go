@@ -472,6 +472,12 @@ func isRemoteURL(path string) bool {
 }
 
 func (s *VideoMergeService) resolveClipVideoPath(localPath *string, remoteURL string) (string, func(), error) {
+	// 优先使用远程 URL（避免创建临时文件，FFmpeg 可以直接处理 HTTP URL）
+	if strings.TrimSpace(remoteURL) != "" {
+		return remoteURL, func() {}, nil
+	}
+
+	// 回退到本地路径
 	if localPath != nil && strings.TrimSpace(*localPath) != "" {
 		key := strings.TrimSpace(*localPath)
 		if s.storageService != nil {
@@ -485,9 +491,7 @@ func (s *VideoMergeService) resolveClipVideoPath(localPath *string, remoteURL st
 		}
 		return filepath.Join(s.storagePath, key), func() {}, nil
 	}
-	if strings.TrimSpace(remoteURL) != "" {
-		return remoteURL, func() {}, nil
-	}
+
 	return "", func() {}, fmt.Errorf("no video path available")
 }
 
@@ -518,14 +522,8 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 	// 根据时间线数据构建场景片段
 	var sceneClips []models.SceneClip
 	var skippedScenes []int
-	var cleanups []func()
-	defer func() {
-		for _, fn := range cleanups {
-			if fn != nil {
-				fn()
-			}
-		}
-	}()
+	// 注意：不在这里使用 cleanup，因为 FFmpeg 合成是异步的
+	// COS 缓存文件需要在 FFmpeg 处理完成后才能清理
 
 	if timelineData != nil && len(timelineData.Clips) > 0 {
 		s.log.Infow("Processing timeline data", "clips_count", len(timelineData.Clips))
@@ -542,10 +540,10 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 				var asset models.Asset
 				if err := s.db.Where("id = ? AND type = ? AND user_id = ?", assetIDStr, models.AssetTypeVideo, userID).First(&asset).Error; err == nil {
 					// 优先使用 local_path
-					resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(asset.LocalPath, asset.URL)
+					resolvedPath, _, resolveErr := s.resolveClipVideoPath(asset.LocalPath, asset.URL)
 					if resolveErr == nil {
 						videoURL = resolvedPath
-						cleanups = append(cleanups, cleanup)
+						// 注意：不保存 cleanup，因为 FFmpeg 需要这些文件直到合成完成
 						s.log.Infow("Using video from asset library", "asset_id", assetIDStr, "video_path", videoURL)
 					}
 					// 如果asset关联了storyboard，使用关联的storyboard_id
@@ -572,11 +570,11 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 					if scene.VideoURL != nil {
 						remoteURL = *scene.VideoURL
 					}
-					resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(videoGen.LocalPath, remoteURL)
+					resolvedPath, _, resolveErr := s.resolveClipVideoPath(videoGen.LocalPath, remoteURL)
 					if resolveErr == nil {
 						videoURL = resolvedPath
 						sceneID = scene.ID
-						cleanups = append(cleanups, cleanup)
+						// 注意：不保存 cleanup，FFmpeg 需要这些文件
 						s.log.Infow("Using video from video_generation", "storyboard_id", clip.StoryboardID, "video_path", videoURL)
 					}
 				} else if scene.VideoURL != nil && *scene.VideoURL != "" {
@@ -630,10 +628,10 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 				scene.ID, models.AssetTypeVideo, episode.ID, userID).
 				Order("created_at DESC").
 				First(&asset).Error; err == nil {
-				resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(asset.LocalPath, asset.URL)
+				resolvedPath, _, resolveErr := s.resolveClipVideoPath(asset.LocalPath, asset.URL)
 				if resolveErr == nil {
 					videoURL = resolvedPath
-					cleanups = append(cleanups, cleanup)
+					// 不保存 cleanup
 					s.log.Infow("Using video from asset library for storyboard",
 						"storyboard_id", scene.ID,
 						"asset_id", asset.ID,
@@ -647,10 +645,10 @@ func (s *VideoMergeService) FinalizeEpisode(userID string, apiKey string, episod
 					if scene.VideoURL != nil {
 						remoteURL = *scene.VideoURL
 					}
-					resolvedPath, cleanup, resolveErr := s.resolveClipVideoPath(videoGen.LocalPath, remoteURL)
+					resolvedPath, _, resolveErr := s.resolveClipVideoPath(videoGen.LocalPath, remoteURL)
 					if resolveErr == nil {
 						videoURL = resolvedPath
-						cleanups = append(cleanups, cleanup)
+						// 不保存 cleanup
 						s.log.Infow("Using video from video_generation for storyboard",
 							"storyboard_id", scene.ID,
 							"video_path", videoURL)

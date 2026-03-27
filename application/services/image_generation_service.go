@@ -216,27 +216,48 @@ func (s *ImageGenerationService) ProcessImageGeneration(imageGenID uint, apiKey 
 		referenceImagePaths = append([]string{*imageGen.LocalPath}, referenceImagePaths...)
 	}
 
-	// 将所有参考图片路径转换为 base64（如果是本地路径）或保持原样（如果是 URL）
+	// 将所有参考图片路径转换为可访问的URL或base64
+	// 优先使用公开URL（避免多张base64导致请求体过大触发网关超时）
 	var referenceImages []string
 	for _, imgPath := range referenceImagePaths {
-		// 判断是否为 HTTP/HTTPS URL
+		// 已经是 HTTP/HTTPS URL，保持原样
 		if strings.HasPrefix(imgPath, "http://") || strings.HasPrefix(imgPath, "https://") {
-			// 保持 URL 原样
 			referenceImages = append(referenceImages, imgPath)
-		} else {
-			// 视为本地路径，转换为 base64
-			base64Image, err := s.loadImageAsBase64(imgPath)
-			if err != nil {
-				s.log.Warnw("Failed to load local image as base64",
-					"error", err,
+			continue
+		}
+		// 已经是 base64，保持原样
+		if strings.HasPrefix(imgPath, "data:") {
+			referenceImages = append(referenceImages, imgPath)
+			continue
+		}
+		// 尝试从存储服务获取公开URL（优先，避免base64过大）
+		if s.storageService != nil {
+			publicURL, err := s.storageService.GetURL(context.Background(), imgPath)
+			if err == nil && publicURL != "" {
+				referenceImages = append(referenceImages, publicURL)
+				s.log.Infow("Converted reference image to public URL",
 					"id", imageGenID,
-					"local_path", imgPath)
-			} else {
-				referenceImages = append(referenceImages, base64Image)
-				s.log.Infow("Loaded local image for generation",
-					"id", imageGenID,
-					"local_path", imgPath)
+					"key", imgPath,
+					"url", publicURL)
+				continue
 			}
+			s.log.Warnw("Failed to get public URL for reference image, falling back to base64",
+				"error", err,
+				"id", imageGenID,
+				"key", imgPath)
+		}
+		// 回退：转换为 base64
+		base64Image, err := s.loadImageAsBase64(imgPath)
+		if err != nil {
+			s.log.Warnw("Failed to load local image as base64",
+				"error", err,
+				"id", imageGenID,
+				"local_path", imgPath)
+		} else {
+			referenceImages = append(referenceImages, base64Image)
+			s.log.Infow("Loaded local image as base64 for generation",
+				"id", imageGenID,
+				"local_path", imgPath)
 		}
 	}
 

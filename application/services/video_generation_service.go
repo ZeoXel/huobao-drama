@@ -254,58 +254,76 @@ func (s *VideoGenerationService) ProcessVideoGeneration(videoGenID uint, apiKey 
 		opts = append(opts, video.WithSeed(*videoGen.Seed))
 	}
 
-	// 根据参考图模式添加相应的选项，并将本地图片转换为base64
+	// 根据参考图模式添加相应的选项
+	// 首尾帧和多图模式优先使用公开URL（避免多张base64导致请求体过大触发超时）
+	// 单图模式保持base64（兼容性好）
 	if videoGen.ReferenceMode != nil {
 		switch *videoGen.ReferenceMode {
 		case "first_last":
-			// 首尾帧模式 - 转换本地图片为base64
+			// 首尾帧模式 - 优先使用公开URL，避免两张base64导致请求体过大
 			if videoGen.FirstFrameURL != nil {
-				firstFrameBase64, err := s.convertImageToBase64(*videoGen.FirstFrameURL)
+				firstFrameURL, err := s.convertImageToPublicURL(*videoGen.FirstFrameURL)
 				if err != nil {
-					s.log.Warnw("Failed to convert first frame to base64, using original URL", "error", err)
-					opts = append(opts, video.WithFirstFrame(*videoGen.FirstFrameURL))
-				} else {
-					opts = append(opts, video.WithFirstFrame(firstFrameBase64))
+					s.log.Warnw("Failed to get public URL for first frame, falling back to base64", "error", err)
+					firstFrameURL, err = s.convertImageToBase64(*videoGen.FirstFrameURL)
+					if err != nil {
+						s.log.Errorw("Failed to convert first frame", "error", err)
+					}
+				}
+				if firstFrameURL != "" {
+					opts = append(opts, video.WithFirstFrame(firstFrameURL))
 				}
 			}
 			if videoGen.LastFrameURL != nil {
-				lastFrameBase64, err := s.convertImageToBase64(*videoGen.LastFrameURL)
+				lastFrameURL, err := s.convertImageToPublicURL(*videoGen.LastFrameURL)
 				if err != nil {
-					s.log.Warnw("Failed to convert last frame to base64, using original URL", "error", err)
-					opts = append(opts, video.WithLastFrame(*videoGen.LastFrameURL))
-				} else {
-					opts = append(opts, video.WithLastFrame(lastFrameBase64))
+					s.log.Warnw("Failed to get public URL for last frame, falling back to base64", "error", err)
+					lastFrameURL, err = s.convertImageToBase64(*videoGen.LastFrameURL)
+					if err != nil {
+						s.log.Errorw("Failed to convert last frame", "error", err)
+					}
+				}
+				if lastFrameURL != "" {
+					opts = append(opts, video.WithLastFrame(lastFrameURL))
 				}
 			}
 		case "multiple":
-			// 多图模式 - 转换本地图片为base64
+			// 多图模式 - 优先使用公开URL
 			if videoGen.ReferenceImageURLs != nil {
 				var imageURLs []string
 				if err := json.Unmarshal([]byte(*videoGen.ReferenceImageURLs), &imageURLs); err == nil {
-					var base64Images []string
+					var accessibleURLs []string
 					for _, imgURL := range imageURLs {
-						base64Img, err := s.convertImageToBase64(imgURL)
+						accessibleURL, err := s.convertImageToPublicURL(imgURL)
 						if err != nil {
-							s.log.Warnw("Failed to convert reference image to base64, using original URL", "error", err, "url", imgURL)
-							base64Images = append(base64Images, imgURL)
-						} else {
-							base64Images = append(base64Images, base64Img)
+							s.log.Warnw("Failed to get public URL, falling back to base64", "error", err, "url", imgURL)
+							accessibleURL, err = s.convertImageToBase64(imgURL)
+							if err != nil {
+								s.log.Errorw("Failed to convert reference image", "error", err, "url", imgURL)
+								continue
+							}
 						}
+						accessibleURLs = append(accessibleURLs, accessibleURL)
 					}
-					opts = append(opts, video.WithReferenceImages(base64Images))
+					opts = append(opts, video.WithReferenceImages(accessibleURLs))
 				}
 			}
 		}
 	}
 
 	// 构造imageURL参数（单图模式使用，其他模式传空字符串）
-	// 如果是本地图片，转换为base64
+	// 优先尝试base64，失败则尝试公开URL，避免直接传COS key导致API无法识别
 	imageURL := ""
 	if videoGen.ImageURL != nil {
 		base64Image, err := s.convertImageToBase64(*videoGen.ImageURL)
 		if err != nil {
-			s.log.Warnw("Failed to convert image to base64, using original URL", "error", err)
-			imageURL = *videoGen.ImageURL
+			s.log.Warnw("Failed to convert image to base64, trying public URL", "error", err)
+			publicURL, urlErr := s.convertImageToPublicURL(*videoGen.ImageURL)
+			if urlErr != nil {
+				s.log.Errorw("Failed to get accessible URL for single image", "error", urlErr)
+			} else {
+				imageURL = publicURL
+			}
 		} else {
 			imageURL = base64Image
 		}
@@ -757,13 +775,14 @@ func (s *VideoGenerationService) GenerateVideoFromImage(userID string, apiKey st
 	}
 
 	req := &GenerateVideoRequest{
-		DramaID:      fmt.Sprintf("%d", imageGen.DramaID),
-		StoryboardID: imageGen.StoryboardID,
-		ImageGenID:   &imageGenID,
-		ImageURL:     *imageGen.ImageURL,
-		Prompt:       imageGen.Prompt,
-		Provider:     "doubao",
-		Duration:     duration,
+		DramaID:       fmt.Sprintf("%d", imageGen.DramaID),
+		StoryboardID:  imageGen.StoryboardID,
+		ImageGenID:    &imageGenID,
+		ImageURL:      *imageGen.ImageURL,
+		ReferenceMode: "single",
+		Prompt:        imageGen.Prompt,
+		Provider:      "doubao",
+		Duration:      duration,
 	}
 
 	return s.GenerateVideo(userID, apiKey, req)
@@ -883,4 +902,43 @@ func (s *VideoGenerationService) convertImageToBase64(imageURL string) (string, 
 	}
 	s.log.Infow("Converted remote image to base64", "url", imageURL[:urlLen])
 	return base64Str, nil
+}
+
+// convertImageToPublicURL 将图片路径转换为可公开访问的URL
+// 优先从COS获取公开URL，避免base64编码导致请求体过大
+func (s *VideoGenerationService) convertImageToPublicURL(imagePath string) (string, error) {
+	// 如果已经是HTTP URL，直接返回
+	if strings.HasPrefix(imagePath, "http://") || strings.HasPrefix(imagePath, "https://") {
+		return imagePath, nil
+	}
+
+	// 如果已经是base64格式，直接返回
+	if strings.HasPrefix(imagePath, "data:") {
+		return imagePath, nil
+	}
+
+	// 尝试从COS获取公开URL
+	if s.storageService != nil {
+		publicURL, err := s.storageService.GetURL(context.Background(), imagePath)
+		if err == nil && publicURL != "" {
+			s.log.Infow("Converted storage key to public URL", "key", imagePath, "url", publicURL)
+			return publicURL, nil
+		}
+		s.log.Warnw("Failed to get public URL from storage", "error", err, "key", imagePath)
+	}
+
+	// 尝试从本地存储获取URL
+	if s.localStorage != nil {
+		if !strings.HasPrefix(imagePath, "http") {
+			absPath := s.localStorage.GetAbsolutePath(imagePath)
+			// 本地文件无法通过URL访问，回退到base64
+			base64Str, err := utils.ImageToBase64(absPath)
+			if err == nil {
+				s.log.Infow("Fallback: converted local image to base64", "path", imagePath)
+				return base64Str, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("cannot convert image to accessible URL: %s", imagePath)
 }

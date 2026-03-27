@@ -255,8 +255,8 @@ func (s *VideoGenerationService) ProcessVideoGeneration(videoGenID uint, apiKey 
 	}
 
 	// 根据参考图模式添加相应的选项
-	// 首尾帧和多图模式优先使用公开URL（避免多张base64导致请求体过大触发超时）
-	// 单图模式保持base64（兼容性好）
+	// 所有模式统一优先使用公开URL（COS URL），base64仅作为fallback
+	// 原因：Seedance/Doubao等API对base64 data URI支持不稳定
 	if videoGen.ReferenceMode != nil {
 		switch *videoGen.ReferenceMode {
 		case "first_last":
@@ -312,20 +312,20 @@ func (s *VideoGenerationService) ProcessVideoGeneration(videoGenID uint, apiKey 
 	}
 
 	// 构造imageURL参数（单图模式使用，其他模式传空字符串）
-	// 优先尝试base64，失败则尝试公开URL，避免直接传COS key导致API无法识别
+	// 优先使用公开URL（与首尾帧模式保持一致），避免base64导致请求体过大或API不支持
 	imageURL := ""
 	if videoGen.ImageURL != nil {
-		base64Image, err := s.convertImageToBase64(*videoGen.ImageURL)
+		publicURL, err := s.convertImageToPublicURL(*videoGen.ImageURL)
 		if err != nil {
-			s.log.Warnw("Failed to convert image to base64, trying public URL", "error", err)
-			publicURL, urlErr := s.convertImageToPublicURL(*videoGen.ImageURL)
-			if urlErr != nil {
-				s.log.Errorw("Failed to get accessible URL for single image", "error", urlErr)
+			s.log.Warnw("Failed to get public URL for single image, falling back to base64", "error", err)
+			base64Image, b64Err := s.convertImageToBase64(*videoGen.ImageURL)
+			if b64Err != nil {
+				s.log.Errorw("Failed to convert single image to base64", "error", b64Err)
 			} else {
-				imageURL = publicURL
+				imageURL = base64Image
 			}
 		} else {
-			imageURL = base64Image
+			imageURL = publicURL
 		}
 	}
 

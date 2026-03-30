@@ -91,7 +91,13 @@
       </div>
 
       <!-- 右侧编辑面板 -->
-      <div class="edit-panel">
+      <button class="panel-toggle-btn" @click="editPanelCollapsed = !editPanelCollapsed" :title="editPanelCollapsed ? '展开面板' : '收起面板'">
+        <el-icon :size="14">
+          <DArrowLeft v-if="editPanelCollapsed" />
+          <DArrowRight v-else />
+        </el-icon>
+      </button>
+      <div class="edit-panel" :class="{ collapsed: editPanelCollapsed }">
         <el-tabs v-model="activeTab" class="edit-tabs">
           <!-- 镜头属性标签 -->
           <el-tab-pane
@@ -2047,6 +2053,8 @@ import {
   Box,
   Crop,
   FolderAdd,
+  DArrowRight,
+  DArrowLeft,
 } from "@element-plus/icons-vue";
 import { dramaAPI } from "@/api/drama";
 import { propAPI } from "@/api/prop";
@@ -2083,6 +2091,7 @@ const characters = ref<any[]>([]);
 const availableScenes = ref<any[]>([]);
 const props = ref<any[]>([]);
 const showPropSelector = ref(false);
+const editPanelCollapsed = ref(false);
 
 const currentStoryboardId = ref<string | null>(null);
 const activeTab = ref("shot");
@@ -5158,12 +5167,40 @@ onBeforeUnmount(() => {
       }
     }
 
+    .panel-toggle-btn {
+      position: relative;
+      z-index: 10;
+      width: 20px;
+      flex-shrink: 0;
+      border: none;
+      border-left: 1px solid var(--border-primary);
+      background: var(--bg-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      transition: all 0.2s;
+
+      &:hover {
+        background: var(--bg-card-hover);
+        color: var(--text-primary);
+      }
+    }
+
     .edit-panel {
       width: 520px;
       background: var(--bg-card);
       border-left: 1px solid var(--border-primary);
       overflow: hidden;
       flex-shrink: 0;
+      transition: width 0.3s ease;
+
+      &.collapsed {
+        width: 0;
+        border-left: none;
+        overflow: hidden;
+      }
 
       .edit-tabs {
         height: 100%;

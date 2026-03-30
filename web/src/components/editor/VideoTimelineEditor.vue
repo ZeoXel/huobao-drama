@@ -2311,11 +2311,12 @@ defineExpose({
       }
 
       .media-grid {
-        max-height: 450px;
+        flex: 1;
         overflow-y: auto;
         padding: 12px;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        grid-auto-rows: min-content;
         gap: 12px;
         align-content: start;
 
@@ -2369,14 +2370,14 @@ defineExpose({
           .media-thumbnail {
             position: relative;
             width: 100%;
-            aspect-ratio: 16/9;
-            background: var(--bg-card-hover);
+            aspect-ratio: 1/1;
+            background: #000;
             cursor: pointer;
 
             video {
               width: 100%;
               height: 100%;
-              object-fit: cover;
+              object-fit: contain;
               pointer-events: none;
             }
 

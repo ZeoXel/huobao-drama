@@ -477,16 +477,16 @@ func (s *VideoMergeService) resolveClipVideoPath(localPath *string, remoteURL st
 		return remoteURL, func() {}, nil
 	}
 
-	// 回退到本地路径
+	// 通过 GetURL 获取对象存储的远程访问 URL，FFmpeg 直接用 HTTP 下载
 	if localPath != nil && strings.TrimSpace(*localPath) != "" {
 		key := strings.TrimSpace(*localPath)
 		if s.storageService != nil {
-			local, cleanup, err := s.storageService.GetLocalPath(context.Background(), key)
-			if err == nil && local != "" {
-				return local, cleanup, nil
+			if url, err := s.storageService.GetURL(context.Background(), key); err == nil && url != "" {
+				return url, func() {}, nil
 			}
 		}
-		if filepath.IsAbs(key) || filepath.HasPrefix(key, s.storagePath) {
+		// 回退到本地文件路径
+		if filepath.IsAbs(key) {
 			return key, func() {}, nil
 		}
 		return filepath.Join(s.storagePath, key), func() {}, nil

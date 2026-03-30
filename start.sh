@@ -24,6 +24,12 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
+# 加载本地环境变量
+if [ -f ".env.local" ]; then
+    echo "📦 加载 .env.local 环境变量..."
+    set -a && source .env.local && set +a
+fi
+
 # 创建配置文件（如果不存在）
 if [ ! -f "configs/config.yaml" ]; then
     echo "📝 创建默认配置文件..."

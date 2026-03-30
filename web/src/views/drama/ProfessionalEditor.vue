@@ -3064,6 +3064,7 @@ const generateFrameImage = async () => {
       storyboard_id: currentStoryboard.value.id,
       image_type: "storyboard",
       frame_type: selectedFrameType.value,
+      model: localStorage.getItem('ai_selected_image_model') || undefined,
       reference_images:
         referenceImages.length > 0 ? referenceImages : undefined,
     });

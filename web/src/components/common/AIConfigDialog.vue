@@ -82,6 +82,19 @@
             </el-select>
             <span v-if="imageModels.length === 0" class="no-model">暂无可用模型</span>
           </template>
+          <!-- Image Aspect Ratio -->
+          <div class="ratio-row">
+            <span class="ratio-label">生成比例</span>
+            <div class="ratio-options">
+              <span
+                v-for="r in imageAspectRatios"
+                :key="r"
+                class="ratio-tag"
+                :class="{ active: selectedImageRatio === r }"
+                @click="selectedImageRatio = r"
+              >{{ r }}</span>
+            </div>
+          </div>
         </div>
 
         <!-- Video Model -->
@@ -115,6 +128,19 @@
               </el-option>
             </el-select>
           </template>
+          <!-- Video Aspect Ratio -->
+          <div class="ratio-row">
+            <span class="ratio-label">生成比例</span>
+            <div class="ratio-options">
+              <span
+                v-for="r in videoAspectRatios"
+                :key="r"
+                class="ratio-tag"
+                :class="{ active: selectedVideoRatio === r }"
+                @click="selectedVideoRatio = r"
+              >{{ r }}</span>
+            </div>
+          </div>
         </div>
       </template>
     </div>
@@ -164,6 +190,11 @@ const imageModels = ref<ModelOption[]>([])
 const selectedText = ref('')
 const selectedImage = ref('')
 const selectedVideo = ref('doubao-seedance-1-5-pro-251215')
+const selectedImageRatio = ref('16:9')
+const selectedVideoRatio = ref('16:9')
+
+const imageAspectRatios = ['1:1', '4:3', '3:4', '16:9', '9:16', '21:9']
+const videoAspectRatios = ['16:9', '9:16', '1:1']
 
 // Video: only seedance 1.5 pro for now
 const videoModels: ModelOption[] = [
@@ -202,6 +233,8 @@ function loadSaved() {
   selectedText.value = localStorage.getItem('ai_selected_text_model') || ''
   selectedImage.value = localStorage.getItem('ai_selected_image_model') || ''
   selectedVideo.value = localStorage.getItem('ai_selected_video_model') || ''
+  selectedImageRatio.value = localStorage.getItem('ai_selected_image_ratio') || '16:9'
+  selectedVideoRatio.value = localStorage.getItem('ai_selected_video_ratio') || '16:9'
 }
 
 /** Pick default if current selection is invalid */
@@ -248,6 +281,8 @@ function handleSave() {
   if (selectedText.value) localStorage.setItem('ai_selected_text_model', selectedText.value)
   if (selectedImage.value) localStorage.setItem('ai_selected_image_model', selectedImage.value)
   if (selectedVideo.value) localStorage.setItem('ai_selected_video_model', selectedVideo.value)
+  localStorage.setItem('ai_selected_image_ratio', selectedImageRatio.value)
+  localStorage.setItem('ai_selected_video_ratio', selectedVideoRatio.value)
 
   ElMessage.success('模型配置已保存')
   visible.value = false
@@ -354,6 +389,52 @@ watch(visible, (val) => {
 
 .empty-hint .sub {
   font-size: 12px;
+}
+
+/* Aspect Ratio */
+.ratio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ratio-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ratio-options {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ratio-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  background: transparent;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.ratio-tag:hover {
+  border-color: var(--el-color-primary-light-5);
+  color: var(--el-color-primary);
+}
+
+.ratio-tag.active {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  color: #fff;
 }
 
 /* Footer */

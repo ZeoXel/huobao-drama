@@ -3065,6 +3065,7 @@ const generateFrameImage = async () => {
       image_type: "storyboard",
       frame_type: selectedFrameType.value,
       model: localStorage.getItem('ai_selected_image_model') || undefined,
+      size: localStorage.getItem('ai_selected_image_ratio') || '16:9',
       reference_images:
         referenceImages.length > 0 ? referenceImages : undefined,
     });
@@ -3414,6 +3415,7 @@ const generateVideo = async () => {
       provider: provider,
       model: selectedVideoModel.value,
       reference_mode: selectedReferenceMode.value,
+      aspect_ratio: localStorage.getItem('ai_selected_video_ratio') || '16:9',
     };
 
     // 根据参考图模式设置参数

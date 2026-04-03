@@ -34,7 +34,7 @@ const app = new Hono()
 const corsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)
 app.use('*', cors({
   origin: [
-    'http://localhost:3013',
+    'http://localhost:3012',
     'http://localhost:5678',
     ...corsOrigins,
   ],

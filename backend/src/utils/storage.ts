@@ -1,5 +1,5 @@
 /**
- * 文件存储工具 — 下载远程文件到本地
+ * Storage abstraction — pluggable backend (local filesystem or COS)
  */
 import fs from 'fs'
 import path from 'path'
@@ -11,25 +11,74 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STORAGE_ROOT = process.env.STORAGE_PATH || path.resolve(__dirname, '../../../data/static')
 
 /**
- * 下载远程文件到本地存储
+ * Pluggable storage backend interface.
+ * Keys are relative (e.g. "images/abc.png"). The backend decides local fs or cloud.
+ */
+export interface StorageBackend {
+  save(key: string, data: Buffer, contentType: string): Promise<string>
+  downloadAndSave(remoteUrl: string, key: string): Promise<string>
+  getUrl(key: string): string
+  getLocalPath(key: string): Promise<[string, () => void]>
+  delete(key: string): Promise<void>
+}
+
+class LocalStorage implements StorageBackend {
+  async save(key: string, data: Buffer, _contentType: string): Promise<string> {
+    const filePath = path.join(STORAGE_ROOT, key)
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, data)
+    return `static/${key}`
+  }
+
+  async downloadAndSave(remoteUrl: string, key: string): Promise<string> {
+    const resp = await fetch(remoteUrl)
+    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
+    const buffer = Buffer.from(await resp.arrayBuffer())
+    return this.save(key, buffer, resp.headers.get('content-type') || '')
+  }
+
+  getUrl(key: string): string {
+    return `static/${key}`
+  }
+
+  async getLocalPath(key: string): Promise<[string, () => void]> {
+    const filePath = path.join(STORAGE_ROOT, key)
+    return [filePath, () => {}]
+  }
+
+  async delete(key: string): Promise<void> {
+    const filePath = path.join(STORAGE_ROOT, key)
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+  }
+}
+
+// --- Singleton storage instance ---
+let _storage: StorageBackend | null = null
+
+export function getStorage(): StorageBackend {
+  if (!_storage) {
+    const storageType = (process.env.STORAGE_TYPE || 'local').trim().toLowerCase()
+    if (storageType === 'cos') {
+      const { createCOSStorage } = require('./cos-storage.js')
+      _storage = createCOSStorage()
+    } else {
+      _storage = new LocalStorage()
+    }
+  }
+  return _storage
+}
+
+/**
+ * Download remote file — backwards-compatible wrapper.
+ * Routes through the active storage backend.
  */
 export async function downloadFile(url: string, subDir: string): Promise<string> {
-  const dir = path.join(STORAGE_ROOT, subDir)
-  fs.mkdirSync(dir, { recursive: true })
-
   const ext = getExtFromUrl(url)
-  const filename = `${uuid()}${ext}`
-  const filePath = path.join(dir, filename)
-
-  const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
-
-  const buffer = Buffer.from(await resp.arrayBuffer())
-  fs.writeFileSync(filePath, buffer)
-
-  // 返回相对路径（供 API 返回给前端）
-  return `static/${subDir}/${filename}`
+  const key = `${subDir}/${uuid()}${ext}`
+  return getStorage().downloadAndSave(url, key)
 }
+
+// --- Everything below stays unchanged from original ---
 
 /**
  * 保存上传的文件
@@ -67,13 +116,11 @@ export function getAbsolutePath(relativePath: string): string {
 
 /**
  * 保存 Base64 编码的图片数据到本地存储
- * 用于 Gemini 等只返回 base64 数据的厂商
  */
 export async function saveBase64Image(base64Data: string, mimeType: string, subDir: string): Promise<string> {
   const dir = path.join(STORAGE_ROOT, subDir)
   fs.mkdirSync(dir, { recursive: true })
 
-  // 从 mimeType 推断文件扩展名
   const ext = mimeTypeToExt(mimeType)
   const filename = `${uuid()}${ext}`
   const filePath = path.join(dir, filename)

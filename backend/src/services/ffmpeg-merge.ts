@@ -56,7 +56,7 @@ export async function mergeEpisodeVideos(episodeId: number, dramaId: number): Pr
   const mergeId = insertedMerge.id
 
   // 异步执行
-  doMerge(mergeId, episodeId, videos).catch(err => {
+  doMerge(mergeId, episodeId, videos).catch(async (err) => {
     logTaskError('MergeTask', 'episode-merge', { mergeId, episodeId, error: err.message })
     console.error(`[Merge] Failed:`, err)
     await db.update(schema.videoMerges)

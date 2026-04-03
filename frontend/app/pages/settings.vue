@@ -30,106 +30,34 @@
       <!-- ===== AI 服务配置 ===== -->
       <div v-if="tab === 'ai'" class="settings-scroll">
         <div class="settings-head">
-          <div class="settings-brand">
-            <div class="settings-brand-mark">
-              <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="settings-brand-logo" @error="showBrandImage = false" />
-              <span v-else class="settings-brand-fallback">火</span>
-            </div>
-            <div class="settings-brand-copy">
-              <div class="settings-brand-kicker">Huobao Shorts</div>
-              <div class="settings-brand-name">火宝短剧</div>
-            </div>
-          </div>
           <h2 class="settings-title">AI 服务配置</h2>
-          <p class="settings-desc">先用推荐模板快速落配置，再按服务类型微调。工作台创建集时会锁定所选图片、视频和音频能力。</p>
+          <p class="settings-desc">选择各服务使用的模型</p>
         </div>
-        <section class="setup-panel card">
-          <div class="setup-panel-head">
-            <div>
-              <div class="setup-kicker">Quick Setup</div>
-              <div class="setup-title">火宝推荐配置</div>
-              <div class="setup-desc">一键写入文本、图片、视频、音频四类推荐配置，适合作为开箱默认方案。</div>
-            </div>
-            <button class="btn btn-primary" @click="presetDialog = true">
-              <Sparkles :size="14" /> 火宝一键配置
+
+        <div class="model-selector-panel card">
+          <label class="field" v-for="st in serviceTypeEntries" :key="st.type">
+            <span class="field-label">{{ st.label }}</span>
+            <BaseSelect
+              :modelValue="selectedModels[st.type]"
+              @update:modelValue="v => selectedModels[st.type] = v"
+              :options="modelSelectOptions[st.type]"
+              :placeholder="`选择${st.label}...`"
+              searchable
+            />
+          </label>
+
+          <div class="model-save-row">
+            <button class="btn btn-primary" :disabled="saving" @click="saveModelConfigs">
+              <Loader2 v-if="saving" :size="12" class="animate-spin" />
+              保存配置
             </button>
           </div>
-          <div class="preset-grid">
-            <article v-for="preset in huobaoPresetCards" :key="preset.serviceType" class="preset-card">
-              <div class="preset-card-top">
-                <span class="preset-service">{{ preset.label }}</span>
-                <span class="tag tag-accent">{{ preset.provider }}</span>
-              </div>
-              <div class="preset-model mono">{{ preset.model }}</div>
-              <div class="preset-base mono">{{ preset.baseUrl }}</div>
-            </article>
-          </div>
-        </section>
-        <section class="setup-panel card">
-          <div class="setup-panel-head compact">
-            <div>
-              <div class="setup-title">快捷模板</div>
-              <div class="setup-desc">选择服务类型后，直接用模板填充推荐的 `provider / base URL / model`。</div>
-            </div>
-          </div>
-          <div class="template-row">
-            <button
-              v-for="st in serviceTypes"
-              :key="st.type"
-              class="template-type-chip"
-              @click="startAddCfg(st.type)"
-            >
-              {{ st.label }}
-            </button>
-          </div>
-        </section>
-        <div class="sections">
-          <section v-for="st in serviceTypes" :key="st.type">
-            <div class="section-head">
-              <div>
-                <span class="section-title">{{ st.label }}</span>
-                <div class="section-subtitle">{{ serviceMeta[st.type].desc }}</div>
-              </div>
-              <span v-if="countActive(st.type)" class="tag tag-accent">{{ countActive(st.type) }} 已启用</span>
-              <button class="btn btn-ghost btn-sm ml-auto" @click="startAddCfg(st.type)"><Plus :size="13" /> 添加</button>
-            </div>
-            <div class="config-list">
-              <div v-for="c in byType(st.type)" :key="c.id" class="card config-row">
-                <div class="config-info">
-                  <div class="config-main">
-                    <div class="config-line">
-                      <span class="config-provider">{{ c.provider }}</span>
-                      <span class="config-name">{{ c.name || `${c.provider}-${c.service_type}` }}</span>
-                    </div>
-                    <span class="config-model mono truncate">{{ fmtModel(c.model) }}</span>
-                    <span class="config-base mono truncate">{{ c.base_url || '未设置 Base URL' }}</span>
-                  </div>
-                </div>
-                <span :class="['tag', c.api_key ? 'tag-success' : 'tag-error']">{{ c.api_key ? '已配置' : '无密钥' }}</span>
-                <button class="btn btn-ghost btn-sm" @click="testExistingCfg(c)">测试</button>
-                <label class="toggle"><input type="checkbox" :checked="c.is_active" @change="toggleCfg(c)"><span /></label>
-                <button class="btn btn-ghost btn-icon" @click="startEditCfg(c)"><Pencil :size="13" /></button>
-                <button class="btn btn-ghost btn-icon" @click="delCfg(c.id)"><Trash2 :size="13" /></button>
-              </div>
-              <p v-if="!byType(st.type).length" class="config-empty">暂无配置</p>
-            </div>
-          </section>
         </div>
       </div>
 
       <!-- ===== Agent 配置 ===== -->
       <div v-else-if="tab === 'agents'" class="settings-scroll">
         <div class="settings-head">
-          <div class="settings-brand">
-            <div class="settings-brand-mark">
-              <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="settings-brand-logo" @error="showBrandImage = false" />
-              <span v-else class="settings-brand-fallback">火</span>
-            </div>
-            <div class="settings-brand-copy">
-              <div class="settings-brand-kicker">Huobao Shorts</div>
-              <div class="settings-brand-name">火宝短剧</div>
-            </div>
-          </div>
           <h2 class="settings-title">Agent 配置</h2>
           <p class="settings-desc">高级区只保留 Agent 运行配置。这里可以调整模型、提示词和参数，保存后立即生效。</p>
         </div>
@@ -199,16 +127,6 @@
         <!-- Skill 管理右侧主区域 -->
         <div class="settings-scroll skills-main">
           <div class="settings-head">
-            <div class="settings-brand">
-              <div class="settings-brand-mark">
-                <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="settings-brand-logo" @error="showBrandImage = false" />
-                <span v-else class="settings-brand-fallback">火</span>
-              </div>
-              <div class="settings-brand-copy">
-                <div class="settings-brand-kicker">Huobao Shorts</div>
-                <div class="settings-brand-name">火宝短剧</div>
-              </div>
-            </div>
             <div style="display:flex;align-items:center;gap:10px">
               <span class="agent-type-badge" style="width:32px;height:32px;font-size:16px">{{ selectedAgentIcon }}</span>
               <div>
@@ -270,100 +188,6 @@
       </div>
     </div>
 
-    <!-- AI Config Dialog -->
-    <div v-if="cfgDialog" class="overlay" @click.self="cfgDialog = false">
-      <form class="modal card config-modal" @submit.prevent="saveCfg">
-        <div class="config-modal-head">
-          <div>
-            <div class="setup-kicker">{{ cfgEditId ? 'Edit Config' : 'New Config' }}</div>
-            <h2 class="modal-title">{{ cfgEditId ? '编辑服务配置' : `添加${serviceMeta[cfgForm.service_type].label}服务` }}</h2>
-            <div class="modal-note">推荐先选择模板，系统会自动填入更合理的 `Base URL` 与默认模型。</div>
-          </div>
-          <span class="tag tag-accent">{{ serviceMeta[cfgForm.service_type].label }}</span>
-        </div>
-        <div class="preset-picker">
-          <button
-            v-for="preset in presetsByType(cfgForm.service_type)"
-            :key="`${cfgForm.service_type}-${preset.provider}`"
-            type="button"
-            class="preset-pill"
-            @click="applyProviderPreset(cfgForm.service_type, preset.provider)"
-          >
-            {{ preset.label }}
-          </button>
-        </div>
-        <label class="field">
-          <span class="field-label">配置名称</span>
-          <input v-model="cfgForm.name" class="input" placeholder="如 火宝默认图像服务" />
-        </label>
-        <label class="field"><span class="field-label">服务商</span>
-          <BaseSelect v-model="cfgForm.provider" :options="providerSelectOptions" placeholder="选择服务商" searchable />
-        </label>
-        <label class="field">
-          <span class="field-label">优先级</span>
-          <input v-model.number="cfgForm.priority" class="input" type="number" min="0" max="999" />
-          <span class="field-hint">数值越高越优先。工作台默认会优先使用同类型里优先级最高的启用配置。</span>
-        </label>
-        <label class="field"><span class="field-label">API Key</span><input v-model="cfgForm.api_key" class="input" type="password" placeholder="sk-..." /></label>
-        <label class="field"><span class="field-label">Base URL</span><input v-model="cfgForm.base_url" class="input" placeholder="https://..." /></label>
-        <div class="endpoint-hint">
-          <span class="dim">实际端点前缀：</span>
-          <span class="mono">{{ endpointHint }}</span>
-        </div>
-        <label class="field"><span class="field-label">模型（逗号分隔）</span><input v-model="cfgForm.modelStr" class="input" placeholder="model-name" /></label>
-        <div v-if="cfgTestResult" class="test-result" :class="{ ok: cfgTestResult.reachable, bad: !cfgTestResult.reachable }">
-          <div class="test-result-head">
-            <span class="tag" :class="cfgTestResult.reachable ? 'tag-success' : 'tag-error'">{{ cfgTestResult.status || 'ERROR' }}</span>
-            <span>{{ cfgTestResult.message }}</span>
-          </div>
-          <div class="mono test-result-url">{{ cfgTestResult.method }} {{ cfgTestResult.url }}</div>
-          <div v-if="cfgTestResult.response_preview" class="mono test-result-preview">{{ cfgTestResult.response_preview }}</div>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" :disabled="cfgTesting" @click="testDraftCfg">
-            <Loader2 v-if="cfgTesting" :size="12" class="animate-spin" />
-            <span v-else>测试配置</span>
-          </button>
-          <button type="button" class="btn" @click="cfgDialog = false">取消</button>
-          <button type="submit" class="btn btn-primary">保存</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- Huobao Preset Dialog -->
-    <div v-if="presetDialog" class="overlay" @click.self="presetDialog = false">
-      <form class="modal card config-modal" @submit.prevent="applyHuobaoPreset">
-        <div class="config-modal-head">
-          <div>
-            <div class="setup-kicker">Huobao Preset</div>
-            <h2 class="modal-title">火宝一键配置</h2>
-            <div class="modal-note">按火宝推荐链路自动创建或更新 4 条服务配置，并同时初始化 5 个 Agent 的默认模型。</div>
-          </div>
-          <span class="tag tag-success">推荐</span>
-        </div>
-        <div class="huobao-grid">
-          <label class="field">
-            <span class="field-label">Huobao API Key <span class="dim">(统一用于文本 / 图片 / 视频 / 音频)</span></span>
-            <input v-model="huobaoForm.apiKey" class="input" type="password" placeholder="用于 api.chatfire.site 全链路服务" />
-          </label>
-        </div>
-        <div class="preset-grid compact">
-          <article v-for="preset in huobaoPresetCards" :key="`${preset.serviceType}-${preset.provider}`" class="preset-card">
-            <div class="preset-card-top">
-              <span class="preset-service">{{ preset.label }}</span>
-              <span class="tag tag-accent">{{ preset.provider }}</span>
-            </div>
-            <div class="preset-model mono">{{ preset.model }}</div>
-            <div class="preset-base mono">{{ preset.baseUrl }}</div>
-          </article>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn" @click="presetDialog = false">取消</button>
-          <button type="submit" class="btn btn-primary">创建并启用</button>
-        </div>
-      </form>
-    </div>
-
     <!-- Add Skill Dialog -->
     <div v-if="addSkillDialog" class="overlay" @click.self="addSkillDialog = false">
       <form class="modal card" @submit.prevent="confirmAddSkill">
@@ -390,13 +214,11 @@
 </template>
 
 <script setup>
-import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, Sparkles } from 'lucide-vue-next'
+import { Plus, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu } from 'lucide-vue-next'
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
 import { aiConfigAPI, agentConfigAPI, skillsAPI } from '~/composables/useApi'
-import brandLogo from '~/assets/huobao-logo.png'
 
-const showBrandImage = ref(true)
 const tab = ref('ai')
 const showAdvanced = ref(false)
 const baseTabs = [
@@ -410,163 +232,124 @@ watch(showAdvanced, (v) => {
   if (!v && tab.value !== 'ai') tab.value = 'ai'
 })
 
-// ===== AI Service Configs =====
-const cfgs = ref([])
-const cfgDialog = ref(false)
-const cfgEditId = ref(null)
-const presetDialog = ref(false)
-const cfgTesting = ref(false)
-const cfgTestResult = ref(null)
-const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', modelStr: '', service_type: 'text', priority: 0 })
-const huobaoForm = reactive({ apiKey: '' })
-const serviceTypes = [{ type: 'text', label: '文本' }, { type: 'image', label: '图片' }, { type: 'video', label: '视频' }, { type: 'audio', label: '音频' }]
-const providers = ['ali', 'chatfire', 'gemini', 'minimax', 'openai', 'openrouter', 'vidu', 'volcengine']
-const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
-const serviceMeta = {
-  text: { label: '文本', desc: '剧本改写、角色场景提取、分镜拆解等 Agent 文本能力' },
-  image: { label: '图片', desc: '角色图、场景图、镜头图与首尾帧等静态图像生成' },
-  video: { label: '视频', desc: '镜头视频生成，支持单图、多图和首尾帧模式' },
-  audio: { label: '音频', desc: '角色试听、旁白与对白语音生成' },
-}
-const providerPresets = {
-  text: {
-    chatfire: { label: 'ChatFire 推荐', baseUrl: 'https://api.chatfire.site', models: ['gemini-3-pro-preview'] },
-    openrouter: { label: 'OpenRouter 推荐', baseUrl: 'https://openrouter.ai/api', models: ['google/gemini-3-flash-preview'] },
-    openai: { label: 'OpenAI 推荐', baseUrl: 'https://api.openai.com', models: ['gpt-4.1-mini'] },
-  },
-  image: {
-    chatfire: { label: 'ChatFire 推荐', baseUrl: 'https://api.chatfire.site', models: ['doubao-seedream-4-5-251128'] },
-    gemini: { label: 'Gemini 推荐', baseUrl: 'https://api.chatfire.site', models: ['gemini-3-pro-image-preview'] },
-    volcengine: { label: '火山推荐', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedream-4-0-250828'] },
-  },
-  video: {
-    volcengine: { label: '火宝视频', baseUrl: 'https://api.chatfire.site/volcengine', models: ['doubao-seedance-1-5-pro-251215'] },
-    vidu: { label: 'Vidu 推荐', baseUrl: 'https://api.vidu.com', models: ['viduq3-turbo'] },
-    ali: { label: '阿里推荐', baseUrl: 'https://dashscope.aliyuncs.com', models: ['wan2.6-i2v-flash'] },
-  },
-  audio: {
-    minimax: { label: '火宝音频', baseUrl: 'https://api.chatfire.site/minimax', models: ['speech-2.8-hd'] },
-  },
-}
-const huobaoPresetCards = [
-  { serviceType: 'text', label: '文本', provider: 'chatfire', baseUrl: 'https://api.chatfire.site', model: 'gemini-3-pro-preview', priority: 100 },
-  { serviceType: 'image', label: '图片', provider: 'gemini', baseUrl: 'https://api.chatfire.site', model: 'gemini-3-pro-image-preview', priority: 99 },
-  { serviceType: 'video', label: '视频', provider: 'volcengine', baseUrl: 'https://api.chatfire.site/volcengine', model: 'doubao-seedance-1-5-pro-251215', priority: 98 },
-  { serviceType: 'audio', label: '音频', provider: 'minimax', baseUrl: 'https://api.chatfire.site/minimax', model: 'speech-2.8-hd', priority: 97 },
-]
-const endpointPrefixes = {
-  chatfire: '/v1',
-  openai: '/v1',
-  openrouter: '/v1',
-  minimax: '/v1',
-  gemini: '/v1beta',
-  volcengine: '/api/v3',
-  ali: '/api/v1',
-  vidu: '/ent/v2',
+// ===== Model Options =====
+const modelOptions = {
+  text: [
+    { label: 'Gemini 3 Pro', value: 'gemini-3-pro-preview', provider: 'chatfire' },
+    { label: 'Gemini 3 Flash', value: 'gemini-3-flash-preview', provider: 'chatfire' },
+    { label: 'GPT-4.1 Mini', value: 'gpt-4.1-mini', provider: 'openai' },
+    { label: 'Claude Sonnet 4', value: 'claude-sonnet-4-20250514', provider: 'openai' },
+  ],
+  image: [
+    { label: 'Gemini 3 Pro Image', value: 'gemini-3-pro-image-preview', provider: 'gemini' },
+    { label: 'SeedDream 5.0', value: 'doubao-seedream-5-0-t2i-250428', provider: 'volcengine' },
+    { label: 'SeedDream 4.5', value: 'doubao-seedream-4-5-251128', provider: 'volcengine' },
+    { label: 'DALL-E 3', value: 'dall-e-3', provider: 'openai' },
+  ],
+  video: [
+    { label: 'Seedance 1.5 Pro', value: 'doubao-seedance-1-5-pro-251215', provider: 'volcengine' },
+    { label: 'Seedance 1.5 Lite', value: 'doubao-seedance-1-5-lite-250428', provider: 'volcengine' },
+    { label: 'Vidu Q3 Turbo', value: 'viduq3-turbo', provider: 'vidu' },
+    { label: 'WAN 2.6 Flash', value: 'wan2.6-i2v-flash', provider: 'ali' },
+  ],
+  audio: [
+    { label: 'MiniMax Speech 2.8 HD', value: 'speech-2.8-hd', provider: 'minimax' },
+    { label: 'MiniMax Speech 2.8', value: 'speech-2.8', provider: 'minimax' },
+  ],
 }
 
-const endpointHint = computed(() => {
-  const provider = cfgForm.provider
-  const base = cfgForm.base_url || 'https://...'
-  const prefix = endpointPrefixes[provider] || ''
-  if (!provider) return '选择服务商后显示推荐端点前缀'
-  return `${base}${prefix}`
+const serviceTypeEntries = [
+  { type: 'text', label: '文本模型' },
+  { type: 'image', label: '图片模型' },
+  { type: 'video', label: '视频模型' },
+  { type: 'audio', label: '音频模型' },
+]
+
+const priorityMap = { text: 100, image: 99, video: 98, audio: 97 }
+
+const modelSelectOptions = computed(() => {
+  const result = {}
+  for (const [type, options] of Object.entries(modelOptions)) {
+    result[type] = options.map(o => ({ label: `${o.label} (${o.value})`, value: o.value }))
+  }
+  return result
 })
 
-function byType(t) { return cfgs.value.filter(c => c.service_type === t) }
-function countActive(t) { return byType(t).filter(c => c.is_active).length }
-function fmtModel(m) { return Array.isArray(m) ? m.join(', ') : m || '—' }
-function presetsByType(type) {
-  const group = providerPresets[type] || {}
-  return Object.entries(group).map(([provider, preset]) => ({ provider, ...preset }))
-}
-function applyProviderPreset(type, provider) {
-  const preset = providerPresets[type]?.[provider]
-  if (!preset) return
-  cfgForm.provider = provider
-  cfgForm.base_url = preset.baseUrl
-  cfgForm.modelStr = preset.models.join(', ')
-  cfgForm.name = `${preset.label}-${serviceMeta[type].label}`
+const selectedModels = reactive({ text: '', image: '', video: '', audio: '' })
+const saving = ref(false)
+
+// ===== AI Service Configs =====
+const cfgs = ref([])
+
+async function loadCfgs() {
+  try {
+    cfgs.value = await aiConfigAPI.list()
+    // Pre-select current active model for each type
+    for (const st of serviceTypeEntries) {
+      const activeCfg = cfgs.value
+        .filter(c => c.service_type === st.type && c.is_active)
+        .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))[0]
+      if (activeCfg) {
+        const model = Array.isArray(activeCfg.model) ? activeCfg.model[0] : activeCfg.model
+        // Only pre-select if this model is in our options list
+        const inOptions = modelOptions[st.type].some(o => o.value === model)
+        if (inOptions) {
+          selectedModels[st.type] = model
+        }
+      }
+    }
+  } catch (e) {
+    toast.error(e.message)
+  }
 }
 
-async function loadCfgs() { try { cfgs.value = await aiConfigAPI.list() } catch (e) { toast.error(e.message) } }
-async function toggleCfg(c) { await aiConfigAPI.update(c.id, { is_active: !c.is_active }); loadCfgs() }
-async function delCfg(id) { await aiConfigAPI.del(id); toast.success('已删除'); loadCfgs() }
-function startAddCfg(t) {
-  cfgEditId.value = null
-  cfgTestResult.value = null
-  Object.assign(cfgForm, { name: '', provider: '', api_key: '', base_url: '', modelStr: '', service_type: t, priority: 0 })
-  const firstPreset = presetsByType(t)[0]
-  if (firstPreset) applyProviderPreset(t, firstPreset.provider)
-  cfgDialog.value = true
+function findModelOption(type, modelValue) {
+  return modelOptions[type]?.find(o => o.value === modelValue)
 }
-function startEditCfg(c) {
-  cfgEditId.value = c.id
-  cfgTestResult.value = null
-  Object.assign(cfgForm, {
-    name: c.name || '',
-    provider: c.provider,
-    api_key: c.api_key || '',
-    base_url: c.base_url || '',
-    modelStr: fmtModel(c.model),
-    service_type: c.service_type,
-    priority: c.priority ?? 0,
-  })
-  cfgDialog.value = true
-}
-async function testCfgPayload(payload) {
-  cfgTesting.value = true
+
+async function saveModelConfigs() {
+  saving.value = true
   try {
-    cfgTestResult.value = await aiConfigAPI.test(payload)
-    if (cfgTestResult.value.reachable) toast.success('端点已响应')
-    else toast.warning('端点未通过测试')
+    for (const st of serviceTypeEntries) {
+      const modelValue = selectedModels[st.type]
+      if (!modelValue) continue
+
+      const opt = findModelOption(st.type, modelValue)
+      if (!opt) continue
+
+      // Find existing config for this service_type + provider combo
+      const existing = cfgs.value.find(
+        c => c.service_type === st.type && c.provider === opt.provider
+      )
+
+      if (existing) {
+        // Update existing config
+        await aiConfigAPI.update(existing.id, {
+          model: [modelValue],
+          name: opt.label,
+          is_active: true,
+          priority: priorityMap[st.type],
+        })
+      } else {
+        // Create new config
+        await aiConfigAPI.create({
+          service_type: st.type,
+          provider: opt.provider,
+          name: opt.label,
+          base_url: 'gateway',
+          api_key: 'from-studio',
+          model: [modelValue],
+          priority: priorityMap[st.type],
+          is_active: true,
+        })
+      }
+    }
+    await loadCfgs()
+    toast.success('模型配置已保存')
   } catch (e) {
     toast.error(e.message)
   } finally {
-    cfgTesting.value = false
-  }
-}
-async function testDraftCfg() {
-  await testCfgPayload({
-    service_type: cfgForm.service_type,
-    provider: cfgForm.provider,
-    api_key: cfgForm.api_key,
-    base_url: cfgForm.base_url,
-    model: cfgForm.modelStr.split(',').map(s => s.trim()).filter(Boolean),
-  })
-}
-async function testExistingCfg(c) {
-  startEditCfg(c)
-  await testCfgPayload({
-    service_type: c.service_type,
-    provider: c.provider,
-    api_key: c.api_key || '',
-    base_url: c.base_url || '',
-    model: Array.isArray(c.model) ? c.model : [],
-  })
-}
-async function saveCfg() {
-  if (!cfgForm.provider) { toast.warning('选择服务商'); return }
-  const models = cfgForm.modelStr.split(',').map(s => s.trim()).filter(Boolean)
-  try {
-    if (cfgEditId.value) await aiConfigAPI.update(cfgEditId.value, { name: cfgForm.name, provider: cfgForm.provider, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority })
-    else await aiConfigAPI.create({ service_type: cfgForm.service_type, provider: cfgForm.provider, name: cfgForm.name || `${cfgForm.provider}-${cfgForm.service_type}`, api_key: cfgForm.api_key, base_url: cfgForm.base_url, model: models, priority: cfgForm.priority })
-    cfgDialog.value = false; toast.success('已保存'); loadCfgs()
-  } catch (e) { toast.error(e.message) }
-}
-async function applyHuobaoPreset() {
-  if (!huobaoForm.apiKey) {
-    toast.warning('请填写 Huobao API Key')
-    return
-  }
-  try {
-    await aiConfigAPI.huobaoPreset(huobaoForm.apiKey)
-    await loadCfgs()
-    await loadAgents()
-    presetDialog.value = false
-    toast.success('火宝推荐配置与默认 Agent LLM 已写入')
-  } catch (e) {
-    toast.error(e.message)
+    saving.value = false
   }
 }
 
@@ -677,22 +460,10 @@ function getAgentCfg(type) {
   return agentCfgs.value.find(a => a.agent_type === type)
 }
 
-const textModelGroups = computed(() => {
-  return cfgs.value
-    .filter(c => c.service_type === 'text' && c.is_active && c.api_key)
-    .map(c => ({
-      label: `${c.provider} — ${c.name}`,
-      models: Array.isArray(c.model) ? c.model : (c.model ? [c.model] : []),
-    }))
-    .filter(g => g.models.length > 0)
+const textModelSelectOptions = computed(() => {
+  // Use text model options as agent model choices
+  return modelOptions.text.map(o => ({ label: `${o.label} (${o.value})`, value: o.value }))
 })
-
-const textModelSelectOptions = computed(() =>
-  textModelGroups.value.map(g => ({
-    label: g.label,
-    options: g.models.map(m => ({ label: m, value: m })),
-  }))
-)
 
 async function loadAgents() {
   try { agentCfgs.value = await agentConfigAPI.list() }
@@ -746,7 +517,7 @@ async function saveAgentCfg(type) {
 
 // ===== Skills =====
 const selectedAgent = ref('script_rewriter')
-const allSkills = ref([])   // { id, name, description }[]
+const allSkills = ref([])
 const editingSkill = ref(null)
 const skillContent = ref('')
 const skillSaving = ref(false)
@@ -886,153 +657,22 @@ onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
 .settings-content { flex: 1; overflow: hidden; }
 .settings-scroll { height: 100%; overflow-y: auto; padding: 36px 48px; max-width: 840px; margin: 0 auto; animation: fadeUp 0.3s var(--ease-out); }
 .settings-head { margin-bottom: 24px; }
-.settings-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.settings-brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 15px;
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(242,247,255,0.9));
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.settings-brand-logo {
-  width: 26px;
-  height: 26px;
-  object-fit: contain;
-  display: block;
-}
-.settings-brand-fallback {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--accent-text);
-  line-height: 1;
-}
-.settings-brand-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  line-height: 1;
-}
-.settings-brand-kicker {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-3);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.settings-brand-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-1);
-  font-family: var(--font-display);
-}
 .settings-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .settings-desc { font-size: 13px; color: var(--text-2); margin-top: 4px; }
 
-/* AI Config */
-.setup-panel {
-  padding: 18px 18px 16px;
-  margin-bottom: 18px;
-}
-.setup-panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-.setup-panel-head.compact { margin-bottom: 12px; }
-.setup-kicker {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin-bottom: 4px;
-}
-.setup-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-0);
-}
-.setup-desc {
-  font-size: 12px;
-  color: var(--text-2);
-  margin-top: 4px;
-}
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.preset-grid.compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 8px;
-}
-.preset-card {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(255,255,255,0.82);
-  padding: 12px 13px;
+/* Model Selector */
+.model-selector-panel {
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 20px;
 }
-.preset-card-top {
+.model-save-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
-.preset-service { font-size: 12px; font-weight: 600; }
-.preset-model { font-size: 12px; color: var(--text-1); }
-.preset-base { font-size: 11px; color: var(--text-3); }
-.template-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.template-type-chip {
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.82);
-  color: var(--text-1);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: 0.15s;
-}
-.template-type-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent-text);
-  background: var(--accent-bg);
-}
-.sections { display: flex; flex-direction: column; gap: 24px; }
-.section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.section-title { font-size: 13px; font-weight: 600; }
-.section-subtitle { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-.config-list { display: flex; flex-direction: column; gap: 6px; }
-.config-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
-.config-info { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.config-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.config-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.config-provider { font-size: 13px; font-weight: 600; }
-.config-name { font-size: 12px; color: var(--text-2); }
-.config-model { font-size: 11px; color: var(--text-2); }
-.config-base { font-size: 11px; color: var(--text-3); }
-.config-empty { font-size: 12px; color: var(--text-3); padding: 12px 0; }
-
-.toggle { position: relative; width: 30px; height: 17px; cursor: pointer; flex-shrink: 0; }
-.toggle input { opacity: 0; width: 0; height: 0; }
-.toggle span { position: absolute; inset: 0; background: var(--bg-3); border-radius: 99px; transition: 0.2s; }
-.toggle span::before { content: ''; position: absolute; width: 13px; height: 13px; left: 2px; bottom: 2px; background: var(--bg-0); border-radius: 50%; transition: 0.2s; box-shadow: var(--shadow); }
-.toggle input:checked + span { background: var(--accent); }
-.toggle input:checked + span::before { transform: translateX(13px); }
 
 /* Agent */
 .agent-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1084,86 +724,10 @@ onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
 /* Shared */
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field-label { font-size: 12px; font-weight: 500; color: var(--text-1); }
-.field-hint { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .overlay { position: fixed; inset: 0; background: rgba(34,45,66,0.32); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeIn 0.18s var(--ease-out); }
 .modal { padding: 28px; width: 420px; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow-elevated); }
 .modal-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
-.config-modal { width: min(720px, calc(100vw - 40px)); max-height: calc(100vh - 48px); overflow-y: auto; }
-.config-modal-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.modal-note {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-2);
-}
-.preset-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.preset-pill {
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.72);
-  color: var(--text-1);
-  border-radius: 999px;
-  padding: 8px 11px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.preset-pill:hover {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  color: var(--accent-text);
-}
-.endpoint-hint {
-  margin-top: -4px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px dashed var(--border);
-  background: rgba(244,248,255,0.72);
-  font-size: 12px;
-}
-.test-result {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-radius: 14px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.72);
-}
-.test-result.ok { border-color: rgba(74, 167, 92, 0.28); }
-.test-result.bad { border-color: rgba(201, 88, 68, 0.28); }
-.test-result-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-1);
-}
-.test-result-url,
-.test-result-preview {
-  font-size: 11px;
-  color: var(--text-3);
-  word-break: break-all;
-}
-.huobao-grid {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 10px;
-}
-
-@media (max-width: 900px) {
-  .preset-grid,
-  .preset-grid.compact {
-    grid-template-columns: 1fr;
-  }
-}
 </style>

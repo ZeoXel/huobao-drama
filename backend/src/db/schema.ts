@@ -6,6 +6,7 @@ import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite
 
 export const dramas = sqliteTable('dramas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   title: text('title').notNull(),
   description: text('description'),
   genre: text('genre'),
@@ -23,6 +24,7 @@ export const dramas = sqliteTable('dramas', {
 
 export const episodes = sqliteTable('episodes', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   dramaId: integer('drama_id').notNull(),
   episodeNumber: integer('episode_number').notNull(),
   title: text('title').notNull(),
@@ -197,6 +199,7 @@ export const agentConfigs = sqliteTable('agent_configs', {
 
 export const imageGenerations = sqliteTable('image_generations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   storyboardId: integer('storyboard_id'),
   dramaId: integer('drama_id'),
   sceneId: integer('scene_id'),
@@ -230,6 +233,7 @@ export const imageGenerations = sqliteTable('image_generations', {
 
 export const videoGenerations = sqliteTable('video_generations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   storyboardId: integer('storyboard_id'),
   dramaId: integer('drama_id'),
   provider: text('provider'),
@@ -265,6 +269,7 @@ export const videoGenerations = sqliteTable('video_generations', {
 
 export const videoMerges = sqliteTable('video_merges', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   episodeId: integer('episode_id'),
   dramaId: integer('drama_id'),
   title: text('title'),
@@ -298,6 +303,7 @@ export const props = sqliteTable('props', {
 
 export const assets = sqliteTable('assets', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   dramaId: integer('drama_id'),
   episodeId: integer('episode_id'),
   storyboardId: integer('storyboard_id'),

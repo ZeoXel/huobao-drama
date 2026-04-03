@@ -356,6 +356,16 @@ ensureColumn('episodes', 'image_config_id', 'INTEGER')
 ensureColumn('episodes', 'video_config_id', 'INTEGER')
 ensureColumn('episodes', 'audio_config_id', 'INTEGER')
 
+// --- User isolation columns ---
+const userIdTables = ['dramas', 'episodes', 'image_generations', 'video_generations', 'video_merges', 'assets']
+for (const table of userIdTables) {
+  ensureColumn(table, 'user_id', "TEXT NOT NULL DEFAULT 'standalone'")
+}
+// Create indexes for user_id filtering
+for (const table of userIdTables) {
+  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_user_id ON ${table}(user_id)`)
+}
+
 export const db = drizzle(sqlite, { schema })
 export { schema }
 export type DB = typeof db

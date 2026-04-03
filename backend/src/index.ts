@@ -23,6 +23,7 @@ import skills from './routes/skills.js'
 import webhooks from './routes/webhooks.js'
 import aiVoices from './routes/aiVoices.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
+import { authMiddleware } from './middleware/auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '../..')
@@ -30,12 +31,20 @@ const projectRoot = path.resolve(__dirname, '../..')
 const app = new Hono()
 
 // Middleware
+const corsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean)
 app.use('*', cors({
-  origin: ['http://localhost:3013', 'http://localhost:5679'],
+  origin: [
+    'http://localhost:3013',
+    'http://localhost:5679',
+    ...corsOrigins,
+  ],
   credentials: true,
 }))
 app.use('*', requestLogger)
 app.use('*', errorHandler)
+
+// Auth — must be after logger, before routes
+app.use('/api/*', authMiddleware)
 
 // Health check
 app.get('/api/v1/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))

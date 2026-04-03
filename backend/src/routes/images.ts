@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, created, now, badRequest } from '../utils/response.js'
+import { success, created, now, badRequest, notFound } from '../utils/response.js'
+import '../middleware/context.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskPayload, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
@@ -10,6 +11,7 @@ const app = new Hono()
 // POST /images — Generate image
 app.post('/', async (c) => {
   const body = await c.req.json()
+  const apiKey = c.get('apiKey') || ''
   if (!body.prompt) return badRequest(c, 'prompt is required')
 
   try {
@@ -56,18 +58,22 @@ app.post('/', async (c) => {
 // GET /images/:id
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
   const [row] = db.select().from(schema.imageGenerations)
     .where(eq(schema.imageGenerations.id, id)).all()
-  return success(c, row || null)
+  if (!row || row.userId !== userId) return notFound(c, 'Image not found')
+  return success(c, row)
 })
 
 // GET /images — List by storyboard_id or drama_id
 app.get('/', async (c) => {
+  const userId = c.get('userId') || 'standalone'
   const storyboardId = c.req.query('storyboard_id')
   const dramaId = c.req.query('drama_id')
 
   let rows = db.select().from(schema.imageGenerations).all()
 
+  rows = rows.filter(r => r.userId === userId)
   if (storyboardId) rows = rows.filter(r => r.storyboardId === Number(storyboardId))
   if (dramaId) rows = rows.filter(r => r.dramaId === Number(dramaId))
 
@@ -77,6 +83,9 @@ app.get('/', async (c) => {
 // DELETE /images/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [row] = db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).all()
+  if (!row || row.userId !== userId) return notFound(c, 'Image not found')
   db.delete(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).run()
   return success(c)
 })

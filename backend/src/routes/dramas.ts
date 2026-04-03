@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
-import { eq, isNull, like, desc } from 'drizzle-orm'
+import { eq, isNull, and, desc } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, badRequest, notFound, created, now } from '../utils/response.js'
 import { toSnakeCase, toSnakeCaseArray } from '../utils/transform.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
@@ -13,9 +14,11 @@ app.get('/', async (c) => {
   const status = c.req.query('status')
   const keyword = c.req.query('keyword')
 
-  let query = db.select().from(schema.dramas).where(isNull(schema.dramas.deletedAt))
+  const userId = c.get('userId') || 'standalone'
 
-  const allRows = await query.orderBy(desc(schema.dramas.updatedAt))
+  const allRows = await db.select().from(schema.dramas)
+    .where(and(isNull(schema.dramas.deletedAt), eq(schema.dramas.userId, userId)))
+    .orderBy(desc(schema.dramas.updatedAt))
   let filtered = allRows
 
   if (status) filtered = filtered.filter(d => d.status === status)
@@ -51,6 +54,7 @@ app.get('/', async (c) => {
 // POST /dramas - Create drama
 app.post('/', async (c) => {
   const body = await c.req.json()
+  const userId = c.get('userId') || 'standalone'
   const ts = now()
   const res = db.insert(schema.dramas).values({
     title: body.title,
@@ -60,6 +64,7 @@ app.post('/', async (c) => {
     tags: body.tags ? JSON.stringify(body.tags) : null,
     metadata: body.metadata,
     status: 'draft',
+    userId,
     createdAt: ts,
     updatedAt: ts,
   }).run()
@@ -86,7 +91,9 @@ app.post('/', async (c) => {
 
 // GET /dramas/stats — must be before /:id
 app.get('/stats', async (c) => {
-  const all = db.select().from(schema.dramas).where(isNull(schema.dramas.deletedAt)).all()
+  const userId = c.get('userId') || 'standalone'
+  const all = db.select().from(schema.dramas)
+    .where(and(isNull(schema.dramas.deletedAt), eq(schema.dramas.userId, userId))).all()
   const byStatus = Object.entries(
     all.reduce((acc, d) => {
       acc[d.status || 'draft'] = (acc[d.status || 'draft'] || 0) + 1
@@ -99,8 +106,9 @@ app.get('/stats', async (c) => {
 // GET /dramas/:id - Get drama detail
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
   const [drama] = await db.select().from(schema.dramas).where(eq(schema.dramas.id, id))
-  if (!drama) return notFound(c, '剧本不存在')
+  if (!drama || drama.userId !== userId) return notFound(c, '剧本不存在')
 
   const eps = await db.select().from(schema.episodes)
     .where(eq(schema.episodes.dramaId, id))
@@ -124,6 +132,10 @@ app.get('/:id', async (c) => {
 // PUT /dramas/:id - Update drama
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [existing] = db.select().from(schema.dramas).where(eq(schema.dramas.id, id)).all()
+  if (!existing || existing.userId !== userId) return notFound(c, '剧本不存在')
+
   const body = await c.req.json()
   const updates: Record<string, any> = { updatedAt: now() }
   if (body.title !== undefined) updates.title = body.title
@@ -140,6 +152,10 @@ app.put('/:id', async (c) => {
 // DELETE /dramas/:id - Soft delete
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [existing] = db.select().from(schema.dramas).where(eq(schema.dramas.id, id)).all()
+  if (!existing || existing.userId !== userId) return notFound(c, '剧本不存在')
+
   await db.update(schema.dramas).set({ deletedAt: now() }).where(eq(schema.dramas.id, id))
   return success(c)
 })
@@ -147,6 +163,10 @@ app.delete('/:id', async (c) => {
 // PUT /dramas/:id/characters - Save characters
 app.put('/:id/characters', async (c) => {
   const dramaId = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, '剧本不存在')
+
   const body = await c.req.json()
   const chars = body.characters || []
   const ts = now()
@@ -164,6 +184,10 @@ app.put('/:id/characters', async (c) => {
 // PUT /dramas/:id/episodes - Save episodes
 app.put('/:id/episodes', async (c) => {
   const dramaId = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, '剧本不存在')
+
   const body = await c.req.json()
   const episodes = body.episodes || []
   const ts = now()

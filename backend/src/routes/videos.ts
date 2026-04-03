@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, created, badRequest } from '../utils/response.js'
+import { success, created, badRequest, notFound } from '../utils/response.js'
+import '../middleware/context.js'
 import { generateVideo } from '../services/video-generation.js'
 import { logTaskError, logTaskPayload, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
@@ -10,6 +11,7 @@ const app = new Hono()
 // POST /videos — Generate video
 app.post('/', async (c) => {
   const body = await c.req.json()
+  const apiKey = c.get('apiKey') || ''
   if (!body.prompt) return badRequest(c, 'prompt is required')
 
   try {
@@ -57,18 +59,22 @@ app.post('/', async (c) => {
 // GET /videos/:id
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
   const [row] = db.select().from(schema.videoGenerations)
     .where(eq(schema.videoGenerations.id, id)).all()
-  return success(c, row || null)
+  if (!row || row.userId !== userId) return notFound(c, 'Video not found')
+  return success(c, row)
 })
 
 // GET /videos — List by storyboard_id or drama_id
 app.get('/', async (c) => {
+  const userId = c.get('userId') || 'standalone'
   const storyboardId = c.req.query('storyboard_id')
   const dramaId = c.req.query('drama_id')
 
   let rows = db.select().from(schema.videoGenerations).all()
 
+  rows = rows.filter(r => r.userId === userId)
   if (storyboardId) rows = rows.filter(r => r.storyboardId === Number(storyboardId))
   if (dramaId) rows = rows.filter(r => r.dramaId === Number(dramaId))
 
@@ -78,6 +84,9 @@ app.get('/', async (c) => {
 // DELETE /videos/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [row] = db.select().from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
+  if (!row || row.userId !== userId) return notFound(c, 'Video not found')
   db.delete(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).run()
   return success(c)
 })

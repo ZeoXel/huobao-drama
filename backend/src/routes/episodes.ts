@@ -3,16 +3,20 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, notFound, badRequest, now } from '../utils/response.js'
 import { toSnakeCaseArray, toSnakeCase } from '../utils/transform.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
 // POST /episodes — Create a new episode
 app.post('/', async (c) => {
   const body = await c.req.json()
+  const userId = c.get('userId') || 'standalone'
   if (!body.drama_id) return badRequest(c, 'drama_id required')
   if (!body.image_config_id || !body.video_config_id || !body.audio_config_id) {
     return badRequest(c, 'image_config_id, video_config_id and audio_config_id are required')
   }
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, body.drama_id)).all()
+  if (!drama || drama.userId !== userId) return badRequest(c, 'drama not found')
   const ts = now()
 
   // Get next episode number
@@ -28,6 +32,7 @@ app.post('/', async (c) => {
     imageConfigId: body.image_config_id,
     videoConfigId: body.video_config_id,
     audioConfigId: body.audio_config_id,
+    userId,
     createdAt: ts,
     updatedAt: ts,
   }).run()
@@ -47,6 +52,12 @@ app.post('/', async (c) => {
 // PUT /episodes/:id - Update episode fields
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, id)).all()
+  if (!ep) return notFound(c, 'Episode not found')
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, 'Episode not found')
+
   const body = await c.req.json()
 
   const allowed = ['content', 'script_content', 'title', 'description', 'status']
@@ -71,6 +82,12 @@ app.put('/:id', async (c) => {
 // GET /episodes/:id/characters — characters linked to this episode
 app.get('/:id/characters', async (c) => {
   const episodeId = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId)).all()
+  if (!ep) return notFound(c, 'Episode not found')
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, 'Episode not found')
+
   const links = db.select().from(schema.episodeCharacters)
     .where(eq(schema.episodeCharacters.episodeId, episodeId)).all()
   const charIds = links.map(l => l.characterId)
@@ -83,6 +100,12 @@ app.get('/:id/characters', async (c) => {
 // GET /episodes/:id/scenes — scenes linked to this episode
 app.get('/:id/scenes', async (c) => {
   const episodeId = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId)).all()
+  if (!ep) return notFound(c, 'Episode not found')
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, 'Episode not found')
+
   const links = db.select().from(schema.episodeScenes)
     .where(eq(schema.episodeScenes.episodeId, episodeId)).all()
   const sceneIds = links.map(l => l.sceneId)
@@ -95,6 +118,12 @@ app.get('/:id/scenes', async (c) => {
 // GET /episodes/:episode_id/storyboards
 app.get('/:episode_id/storyboards', async (c) => {
   const episodeId = Number(c.req.param('episode_id'))
+  const userId = c.get('userId') || 'standalone'
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId)).all()
+  if (!ep) return notFound(c, 'Episode not found')
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, 'Episode not found')
+
   const rows = db.select().from(schema.storyboards)
     .where(eq(schema.storyboards.episodeId, episodeId))
     .orderBy(schema.storyboards.storyboardNumber)
@@ -125,8 +154,11 @@ app.get('/:episode_id/storyboards', async (c) => {
 // GET /episodes/:id/pipeline-status — 流水线进度
 app.get('/:id/pipeline-status', async (c) => {
   const episodeId = Number(c.req.param('id'))
+  const userId = c.get('userId') || 'standalone'
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId)).all()
   if (!ep) return notFound(c, 'Episode not found')
+  const [drama] = db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()
+  if (!drama || drama.userId !== userId) return notFound(c, 'Episode not found')
 
   const chars = db.select().from(schema.characters).where(eq(schema.characters.dramaId, ep.dramaId)).all()
   const scenes = db.select().from(schema.scenes).where(eq(schema.scenes.dramaId, ep.dramaId)).all()

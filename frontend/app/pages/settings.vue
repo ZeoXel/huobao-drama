@@ -233,6 +233,18 @@ watch(showAdvanced, (v) => {
 })
 
 // ===== Model Options =====
+// Gateway base URLs per provider — adapter adds its own prefix (e.g. /v1, /api/v3)
+const GATEWAY = 'https://api.lsaigc.com'
+const gatewayBaseUrl: Record<string, string> = {
+  chatfire: GATEWAY,         // adapter adds /v1 → /v1/chat/completions
+  openai: GATEWAY,           // adapter adds /v1 → /v1/chat/completions
+  gemini: GATEWAY,           // adapter adds /v1beta → /v1beta/models/...
+  volcengine: `${GATEWAY}/volcengine`,  // adapter adds /api/v3 → /volcengine/api/v3/...
+  minimax: `${GATEWAY}/minimax`,        // adapter adds /v1 → /minimax/v1/t2a_v2
+  vidu: `${GATEWAY}/vidu`,
+  ali: `${GATEWAY}/ali`,
+}
+
 const modelOptions = {
   text: [
     { label: 'Gemini 3 Pro', value: 'gemini-3-pro-preview', provider: 'chatfire' },
@@ -241,7 +253,6 @@ const modelOptions = {
     { label: 'Claude Sonnet 4', value: 'claude-sonnet-4-20250514', provider: 'openai' },
   ],
   image: [
-    { label: 'Gemini 3 Pro Image', value: 'gemini-3-pro-image-preview', provider: 'gemini' },
     { label: 'SeedDream 5.0', value: 'doubao-seedream-5-0-t2i-250428', provider: 'volcengine' },
     { label: 'SeedDream 4.5', value: 'doubao-seedream-4-5-251128', provider: 'volcengine' },
     { label: 'DALL-E 3', value: 'dall-e-3', provider: 'openai' },
@@ -253,8 +264,8 @@ const modelOptions = {
     { label: 'WAN 2.6 Flash', value: 'wan2.6-i2v-flash', provider: 'ali' },
   ],
   audio: [
-    { label: 'MiniMax Speech 2.8 HD', value: 'speech-2.8-hd', provider: 'minimax' },
-    { label: 'MiniMax Speech 2.8', value: 'speech-2.8', provider: 'minimax' },
+    { label: 'MiniMax Speech 02 HD', value: 'speech-02-hd', provider: 'minimax' },
+    { label: 'MiniMax Speech 01 HD', value: 'speech-01-hd', provider: 'minimax' },
   ],
 }
 
@@ -275,7 +286,8 @@ const modelSelectOptions = computed(() => {
   return result
 })
 
-const selectedModels = reactive({ text: '', image: '', video: '', audio: '' })
+const defaultModels = { text: 'gemini-3-flash-preview', image: 'doubao-seedream-5-0-t2i-250428', video: 'doubao-seedance-1-5-pro-251215', audio: 'speech-02-hd' }
+const selectedModels = reactive({ ...defaultModels })
 const saving = ref(false)
 
 // ===== AI Service Configs =====
@@ -336,7 +348,7 @@ async function saveModelConfigs() {
           service_type: st.type,
           provider: opt.provider,
           name: opt.label,
-          base_url: 'gateway',
+          base_url: gatewayBaseUrl[opt.provider] || GATEWAY,
           api_key: 'from-studio',
           model: [modelValue],
           priority: priorityMap[st.type],

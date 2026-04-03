@@ -34,17 +34,40 @@ export function getTextProviderBaseUrl(config: AIConfig) {
 }
 
 /**
+ * Gateway sub-path per provider.
+ * Adapters add their own prefix (e.g. /v1, /api/v3) to baseUrl.
+ * The gateway routes provider-specific traffic under sub-paths:
+ *   volcengine → GATEWAY/volcengine  (+ adapter adds /api/v3/...)
+ *   minimax    → GATEWAY/minimax     (+ adapter adds /v1/...)
+ *   vidu       → GATEWAY/vidu        (+ adapter adds /ent/v2/...)
+ *   ali        → GATEWAY/ali         (+ adapter adds /api/v1/...)
+ *   others     → GATEWAY             (+ adapter adds /v1/... or /v1beta/...)
+ */
+const GATEWAY_PROVIDER_PATH: Record<string, string> = {
+  volcengine: '/volcengine',
+  minimax: '/minimax',
+  vidu: '/vidu',
+  ali: '/ali',
+}
+
+/**
  * Apply GATEWAY_URL and per-user apiKey overrides.
- * GATEWAY_URL env var, when set, replaces ALL provider baseUrls — all AI requests
- * route through the gateway. User-level apiKey (from auth context) overrides the
- * config-level key for per-user quota isolation.
+ * GATEWAY_URL env var, when set, replaces provider baseUrls with the correct
+ * gateway sub-path. User-level apiKey overrides config-level key for quota isolation.
  */
 function applyOverrides(config: AIConfig, apiKey?: string): AIConfig {
-  const gatewayUrl = (process.env.GATEWAY_URL || '').trim()
+  const gatewayUrl = (process.env.GATEWAY_URL || '').trim().replace(/\/+$/, '')
   const userApiKey = (apiKey || '').trim()
+
+  let baseUrl = config.baseUrl
+  if (gatewayUrl) {
+    const subPath = GATEWAY_PROVIDER_PATH[config.provider.toLowerCase()] || ''
+    baseUrl = `${gatewayUrl}${subPath}`
+  }
+
   return {
     ...config,
-    baseUrl: gatewayUrl || config.baseUrl,
+    baseUrl,
     apiKey: userApiKey || config.apiKey,
   }
 }

@@ -29,7 +29,8 @@ if (DATABASE_TYPE === 'postgres') {
     `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS tts_audio_url TEXT`,
     `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS subtitle_url TEXT`,
     `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS composed_video_url TEXT`,
-    // Episode config IDs
+    // Episode fields
+    `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS content TEXT`,
     `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS image_config_id INTEGER`,
     `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS video_config_id INTEGER`,
     `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS audio_config_id INTEGER`,

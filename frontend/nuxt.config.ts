@@ -23,5 +23,10 @@ export default defineNuxtConfig({
       },
     },
   },
+  runtimeConfig: {
+    public: {
+      studioOrigin: process.env.NUXT_PUBLIC_STUDIO_ORIGIN || '',
+    },
+  },
   compatibilityDate: '2025-05-15',
 })

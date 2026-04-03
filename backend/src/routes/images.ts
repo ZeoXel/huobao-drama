@@ -17,9 +17,9 @@ app.post('/', async (c) => {
   try {
     let configId: number | undefined = body.config_id
     if (body.storyboard_id) {
-      const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, Number(body.storyboard_id))).all()
+      const [sb] = await db.select().from(schema.storyboards).where(eq(schema.storyboards.id, Number(body.storyboard_id)))
       if (sb) {
-        const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
+        const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId))
         if (ep?.imageConfigId != null) configId = ep.imageConfigId
       }
     }
@@ -46,8 +46,8 @@ app.post('/', async (c) => {
       apiKey,
     })
 
-    const [record] = db.select().from(schema.imageGenerations)
-      .where(eq(schema.imageGenerations.id, id)).all()
+    const [record] = await db.select().from(schema.imageGenerations)
+      .where(eq(schema.imageGenerations.id, id))
     logTaskSuccess('ImageAPI', 'generate', { generationId: id, provider: record?.provider })
     return created(c, record)
   } catch (err: any) {
@@ -60,8 +60,8 @@ app.post('/', async (c) => {
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const userId = c.get('userId') || 'standalone'
-  const [row] = db.select().from(schema.imageGenerations)
-    .where(eq(schema.imageGenerations.id, id)).all()
+  const [row] = await db.select().from(schema.imageGenerations)
+    .where(eq(schema.imageGenerations.id, id))
   if (!row || row.userId !== userId) return notFound(c, 'Image not found')
   return success(c, row)
 })
@@ -72,7 +72,7 @@ app.get('/', async (c) => {
   const storyboardId = c.req.query('storyboard_id')
   const dramaId = c.req.query('drama_id')
 
-  let rows = db.select().from(schema.imageGenerations).all()
+  let rows = await db.select().from(schema.imageGenerations)
 
   rows = rows.filter(r => r.userId === userId)
   if (storyboardId) rows = rows.filter(r => r.storyboardId === Number(storyboardId))
@@ -85,9 +85,9 @@ app.get('/', async (c) => {
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const userId = c.get('userId') || 'standalone'
-  const [row] = db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).all()
+  const [row] = await db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id))
   if (!row || row.userId !== userId) return notFound(c, 'Image not found')
-  db.delete(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).run()
+  await db.delete(schema.imageGenerations).where(eq(schema.imageGenerations.id, id))
   return success(c)
 })
 

@@ -14,9 +14,8 @@ const app = new Hono()
 // GET /ai-voices?provider=minimax
 app.get('/', async (c) => {
   const provider = c.req.query('provider') || 'minimax'
-  const rows = db.select().from(schema.aiVoices)
+  const rows = await db.select().from(schema.aiVoices)
     .where(eq(schema.aiVoices.provider, provider))
-    .all()
 
   const parsed = rows.map(r => ({
     voice_id: r.voiceId,
@@ -32,10 +31,9 @@ app.get('/', async (c) => {
 // POST /ai-voices/sync
 app.post('/sync', async (c) => {
   // 从数据库获取 minimax 的音频配置
-  const rows = db.select().from(schema.aiServiceConfigs)
+  const allAudioConfigs = await db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.serviceType, 'audio'))
-    .all()
-    .filter(r => r.isActive && r.provider === 'minimax')
+  const rows = allAudioConfigs.filter(r => r.isActive && r.provider === 'minimax')
 
   if (rows.length === 0) {
     return badRequest(c, 'No active minimax audio config found')
@@ -69,7 +67,7 @@ app.post('/sync', async (c) => {
   const ts = now()
 
   // 先清空旧数据
-  db.delete(schema.aiVoices).where(eq(schema.aiVoices.provider, 'minimax')).run()
+  await db.delete(schema.aiVoices).where(eq(schema.aiVoices.provider, 'minimax'))
 
   // 批量插入新数据
   const insertRows = voices.map((v: any) => ({
@@ -82,7 +80,7 @@ app.post('/sync', async (c) => {
   }))
 
   if (insertRows.length > 0) {
-    db.insert(schema.aiVoices).values(insertRows).run()
+    await db.insert(schema.aiVoices).values(insertRows)
   }
 
   return success(c, { count: insertRows.length, message: `Synced ${insertRows.length} voices` })

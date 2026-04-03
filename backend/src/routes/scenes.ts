@@ -12,7 +12,7 @@ const app = new Hono()
 app.post('/', async (c) => {
   const body = await c.req.json()
   const ts = now()
-  const res = db.insert(schema.scenes).values({
+  const [result] = await db.insert(schema.scenes).values({
     dramaId: body.drama_id,
     episodeId: body.episode_id,
     location: body.location,
@@ -20,9 +20,7 @@ app.post('/', async (c) => {
     prompt: body.prompt || body.location,
     createdAt: ts,
     updatedAt: ts,
-  }).run()
-  const [result] = db.select().from(schema.scenes)
-    .where(eq(schema.scenes.id, Number(res.lastInsertRowid))).all()
+  }).returning()
   return created(c, result)
 })
 
@@ -34,7 +32,7 @@ app.put('/:id', async (c) => {
   if (body.location !== undefined) updates.location = body.location
   if (body.time !== undefined) updates.time = body.time
   if (body.prompt !== undefined) updates.prompt = body.prompt
-  db.update(schema.scenes).set(updates).where(eq(schema.scenes.id, id)).run()
+  await db.update(schema.scenes).set(updates).where(eq(schema.scenes.id, id))
   return success(c)
 })
 
@@ -43,22 +41,22 @@ app.post('/:id/generate-image', async (c) => {
   const id = Number(c.req.param('id'))
   const apiKey = c.get('apiKey') || ''
   const body = await c.req.json()
-  const [scene] = db.select().from(schema.scenes).where(eq(schema.scenes.id, id)).all()
+  const [scene] = await db.select().from(schema.scenes).where(eq(schema.scenes.id, id))
   if (!scene) return badRequest(c, 'Scene not found')
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
-  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
+  const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
 
   const prompt = scene.prompt || `${scene.location}, ${scene.time || ''}, 高质量场景, 电影感`
   try {
     logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location })
-    db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
+    await db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id))
     const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined, apiKey })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {
     logTaskError('SceneImage', 'generate', { sceneId: id, error: err.message })
-    db.update(schema.scenes).set({ status: 'failed', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
+    await db.update(schema.scenes).set({ status: 'failed', updatedAt: now() }).where(eq(schema.scenes.id, id))
     return badRequest(c, err.message)
   }
 })
@@ -66,7 +64,7 @@ app.post('/:id/generate-image', async (c) => {
 // DELETE /scenes/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  db.delete(schema.scenes).where(eq(schema.scenes.id, id)).run()
+  await db.delete(schema.scenes).where(eq(schema.scenes.id, id))
   return success(c)
 })
 

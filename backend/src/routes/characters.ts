@@ -22,14 +22,14 @@ app.put('/:id', async (c) => {
   if ('voice_style' in body || 'voiceStyle' in body) {
     updates.voiceSampleUrl = null
   }
-  db.update(schema.characters).set(updates).where(eq(schema.characters.id, id)).run()
+  await db.update(schema.characters).set(updates).where(eq(schema.characters.id, id))
   return success(c)
 })
 
 // DELETE /characters/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  db.update(schema.characters).set({ deletedAt: now() }).where(eq(schema.characters.id, id)).run()
+  await db.update(schema.characters).set({ deletedAt: now() }).where(eq(schema.characters.id, id))
   return success(c)
 })
 
@@ -38,20 +38,20 @@ app.post('/:id/generate-voice-sample', async (c) => {
   const id = Number(c.req.param('id'))
   const apiKey = c.get('apiKey') || ''
   const body = await c.req.json().catch(() => ({}))
-  const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
+  const [char] = await db.select().from(schema.characters).where(eq(schema.characters.id, id))
   if (!char) return badRequest(c, 'Character not found')
   if (!char.voiceStyle) return badRequest(c, '请先分配音色')
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
 
-  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
+  const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
 
   try {
     logTaskStart('VoiceSample', 'generate', { characterId: id, characterName: char.name, episodeId: ep.id, voice: char.voiceStyle })
     const audioPath = await generateVoiceSample(char.name, char.voiceStyle, ep.audioConfigId ?? undefined, apiKey)
-    db.update(schema.characters)
+    await db.update(schema.characters)
       .set({ voiceSampleUrl: audioPath, updatedAt: now() })
-      .where(eq(schema.characters.id, id)).run()
+      .where(eq(schema.characters.id, id))
     logTaskSuccess('VoiceSample', 'generate', { characterId: id, path: audioPath })
     return success(c, { voice_sample_url: audioPath })
   } catch (err: any) {
@@ -65,11 +65,11 @@ app.post('/:id/generate-image', async (c) => {
   const id = Number(c.req.param('id'))
   const apiKey = c.get('apiKey') || ''
   const body = await c.req.json()
-  const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
+  const [char] = await db.select().from(schema.characters).where(eq(schema.characters.id, id))
   if (!char) return badRequest(c, 'Character not found')
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
 
-  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
+  const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
 
   const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
@@ -90,11 +90,11 @@ app.post('/batch-generate-images', async (c) => {
   const body = await c.req.json()
   const ids: number[] = body.character_ids || []
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
-  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
+  const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
   const results: number[] = []
   for (const cid of ids) {
-    const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, cid)).all()
+    const [char] = await db.select().from(schema.characters).where(eq(schema.characters.id, cid))
     if (!char) continue
     const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
     try {

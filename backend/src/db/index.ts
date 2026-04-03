@@ -44,6 +44,18 @@ if (DATABASE_TYPE === 'postgres') {
     // Character voice fields
     `ALTER TABLE characters ADD COLUMN IF NOT EXISTS voice_sample_url TEXT`,
     `ALTER TABLE characters ADD COLUMN IF NOT EXISTS voice_provider TEXT`,
+    // Junction table columns (Go GORM created without id/created_at)
+    `ALTER TABLE episode_characters ADD COLUMN IF NOT EXISTS id SERIAL`,
+    `ALTER TABLE episode_characters ADD COLUMN IF NOT EXISTS created_at TEXT NOT NULL DEFAULT ''`,
+    // Create episode_scenes if missing (Go version used scene.episode_id instead)
+    `CREATE TABLE IF NOT EXISTS episode_scenes (
+      id SERIAL PRIMARY KEY,
+      episode_id INTEGER NOT NULL,
+      scene_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT ''
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_episode_scenes_episode_id ON episode_scenes(episode_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_episode_scenes_scene_id ON episode_scenes(scene_id)`,
   ]
   for (const sql of ensureColumns) {
     try { await client.unsafe(sql) } catch {}

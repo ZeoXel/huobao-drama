@@ -1,7 +1,18 @@
+import { useAuth } from '~/composables/useAuth'
+
 const BASE = '/api/v1'
 
 async function req<T = any>(method: string, path: string, body?: any): Promise<T> {
-  const opts: RequestInit = { method, headers: { 'Content-Type': 'application/json' } }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+
+  try {
+    const { state } = useAuth()
+    if (state.token) headers['Authorization'] = `Bearer ${state.token}`
+    if (state.apiKey) headers['X-API-Key'] = state.apiKey
+    if (state.userId) headers['X-User-ID'] = state.userId
+  } catch { /* composable may be unavailable during SSR */ }
+
+  const opts: RequestInit = { method, headers }
   if (body) opts.body = JSON.stringify(body)
 
   const start = performance.now()

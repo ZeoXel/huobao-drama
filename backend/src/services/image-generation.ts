@@ -24,11 +24,11 @@ interface GenerateImageParams {
 export async function generateImage(params: GenerateImageParams): Promise<number> {
   const ts = now()
   const config = params.configId
-    ? getConfigById(params.configId, params.apiKey)
-    : getActiveConfig('image', params.apiKey)
+    ? await getConfigById(params.configId, params.apiKey)
+    : await getActiveConfig('image', params.apiKey)
   if (!config) throw new Error('No active image AI config')
 
-  const res = db.insert(schema.imageGenerations).values({
+  const [inserted] = await db.insert(schema.imageGenerations).values({
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
     sceneId: params.sceneId,
@@ -42,9 +42,9 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     status: 'processing',
     createdAt: ts,
     updatedAt: ts,
-  }).run()
+  }).returning()
 
-  const lastId = Number(res.lastInsertRowid)
+  const lastId = inserted.id
   logTaskStart('ImageTask', 'enqueue', {
     id: lastId,
     provider: config.provider,
@@ -74,7 +74,7 @@ async function processImageGeneration(id: number, config: AIConfig) {
   const adapter = getImageAdapter(config.provider)
 
   try {
-    const rows = db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).all()
+    const rows = await db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id))
     const record = rows[0]
     if (!record) return
     logTaskProgress('ImageTask', 'build-request', {
@@ -147,18 +147,16 @@ async function processImageGeneration(id: number, config: AIConfig) {
     }
 
     // 异步模式：更新 taskId，开始轮询
-    db.update(schema.imageGenerations)
+    await db.update(schema.imageGenerations)
       .set({ taskId, status: 'processing', updatedAt: now() })
       .where(eq(schema.imageGenerations.id, id))
-      .run()
     logTaskProgress('ImageTask', 'poll-start', { id, taskId, provider: config.provider })
     pollImageTask(id, config, taskId!)
   } catch (err: any) {
     logTaskError('ImageTask', 'process', { id, provider: config.provider, error: err.message })
-    db.update(schema.imageGenerations)
+    await db.update(schema.imageGenerations)
       .set({ status: 'failed', errorMsg: err.message, updatedAt: now() })
       .where(eq(schema.imageGenerations.id, id))
-      .run()
   }
 }
 
@@ -208,19 +206,17 @@ async function pollImageTask(id: number, config: AIConfig, taskId: string) {
   for (let i = 0; i < 120; i++) {
     if (Date.now() - startedAt >= maxDurationMs) {
       logTaskError('ImageTask', 'poll-timeout', { id, taskId, error: 'Polling exceeded 10 minutes' })
-      db.update(schema.imageGenerations)
+      await db.update(schema.imageGenerations)
         .set({ status: 'failed', errorMsg: 'Timeout: Polling exceeded 10 minutes', updatedAt: now() })
         .where(eq(schema.imageGenerations.id, id))
-        .run()
       return
     }
     await new Promise(r => setTimeout(r, 5000))
     if (Date.now() - startedAt >= maxDurationMs) {
       logTaskError('ImageTask', 'poll-timeout', { id, taskId, error: 'Polling exceeded 10 minutes' })
-      db.update(schema.imageGenerations)
+      await db.update(schema.imageGenerations)
         .set({ status: 'failed', errorMsg: 'Timeout: Polling exceeded 10 minutes', updatedAt: now() })
         .where(eq(schema.imageGenerations.id, id))
-        .run()
       return
     }
     try {
@@ -265,10 +261,9 @@ async function pollImageTask(id: number, config: AIConfig, taskId: string) {
     } catch (err: any) {
       if (i === 119 || Date.now() - startedAt >= maxDurationMs) {
         logTaskError('ImageTask', 'poll-timeout', { id, taskId, error: err.message })
-        db.update(schema.imageGenerations)
+        await db.update(schema.imageGenerations)
           .set({ status: 'failed', errorMsg: `Timeout: ${err.message}`, updatedAt: now() })
           .where(eq(schema.imageGenerations.id, id))
-          .run()
         return
       }
       logTaskWarn('ImageTask', 'poll-retry', { id, taskId, attempt: i + 1, error: err.message })
@@ -278,13 +273,12 @@ async function pollImageTask(id: number, config: AIConfig, taskId: string) {
 
 async function handleImageComplete(id: number, provider: string, imageUrl: string) {
   const localPath = await downloadFile(imageUrl, 'images')
-  const rows = db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).all()
+  const rows = await db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id))
   const record = rows[0]
 
-  db.update(schema.imageGenerations)
+  await db.update(schema.imageGenerations)
     .set({ imageUrl, localPath, status: 'completed', updatedAt: now() })
     .where(eq(schema.imageGenerations.id, id))
-    .run()
   logTaskSuccess('ImageTask', 'downloaded', { id, provider, localPath })
 
   // 更新关联表
@@ -293,25 +287,24 @@ async function handleImageComplete(id: number, provider: string, imageUrl: strin
     if (record.frameType === 'first_frame') sbUpdate.firstFrameImage = localPath
     else if (record.frameType === 'last_frame') sbUpdate.lastFrameImage = localPath
     else sbUpdate.composedImage = localPath
-    db.update(schema.storyboards).set(sbUpdate).where(eq(schema.storyboards.id, record.storyboardId)).run()
+    await db.update(schema.storyboards).set(sbUpdate).where(eq(schema.storyboards.id, record.storyboardId))
   }
   if (record?.characterId) {
-    db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
+    await db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId))
   }
   if (record?.sceneId) {
-    db.update(schema.scenes).set({ imageUrl: localPath, status: 'completed', updatedAt: now() }).where(eq(schema.scenes.id, record.sceneId)).run()
+    await db.update(schema.scenes).set({ imageUrl: localPath, status: 'completed', updatedAt: now() }).where(eq(schema.scenes.id, record.sceneId))
   }
 }
 
 async function handleImageCompleteBase64(id: number, provider: string, base64Data: string, mimeType: string) {
   const localPath = await saveBase64Image(base64Data, mimeType, 'images')
-  const rows = db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id)).all()
+  const rows = await db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, id))
   const record = rows[0]
 
-  db.update(schema.imageGenerations)
+  await db.update(schema.imageGenerations)
     .set({ localPath, status: 'completed', updatedAt: now() })
     .where(eq(schema.imageGenerations.id, id))
-    .run()
   logTaskSuccess('ImageTask', 'saved-base64', { id, provider, mimeType, localPath })
 
   // 更新关联表
@@ -320,12 +313,12 @@ async function handleImageCompleteBase64(id: number, provider: string, base64Dat
     if (record.frameType === 'first_frame') sbUpdate.firstFrameImage = localPath
     else if (record.frameType === 'last_frame') sbUpdate.lastFrameImage = localPath
     else sbUpdate.composedImage = localPath
-    db.update(schema.storyboards).set(sbUpdate).where(eq(schema.storyboards.id, record.storyboardId)).run()
+    await db.update(schema.storyboards).set(sbUpdate).where(eq(schema.storyboards.id, record.storyboardId))
   }
   if (record?.characterId) {
-    db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
+    await db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId))
   }
   if (record?.sceneId) {
-    db.update(schema.scenes).set({ imageUrl: localPath, status: 'completed', updatedAt: now() }).where(eq(schema.scenes.id, record.sceneId)).run()
+    await db.update(schema.scenes).set({ imageUrl: localPath, status: 'completed', updatedAt: now() }).where(eq(schema.scenes.id, record.sceneId))
   }
 }

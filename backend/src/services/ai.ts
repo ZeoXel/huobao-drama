@@ -72,10 +72,10 @@ function applyOverrides(config: AIConfig, apiKey?: string): AIConfig {
   }
 }
 
-export function getActiveConfig(serviceType: ServiceType, apiKey?: string): AIConfig | null {
-  const rows = db.select().from(schema.aiServiceConfigs)
+export async function getActiveConfig(serviceType: ServiceType, apiKey?: string): Promise<AIConfig | null> {
+  const allRows = await db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.serviceType, serviceType))
-    .all()
+  const rows = allRows
     .filter(r => r.isActive)
     .sort((a, b) => (b.priority || 0) - (a.priority || 0)) // 高优先级优先
 
@@ -102,29 +102,29 @@ export function getActiveConfig(serviceType: ServiceType, apiKey?: string): AICo
   return applyOverrides(config, apiKey)
 }
 
-export function getTextConfig(apiKey?: string): AIConfig {
-  const config = getActiveConfig('text', apiKey)
+export async function getTextConfig(apiKey?: string): Promise<AIConfig> {
+  const config = await getActiveConfig('text', apiKey)
   if (!config) throw new Error('No active text AI config')
   return config
 }
 
-export function getAudioConfig(apiKey?: string): AIConfig {
-  const config = getActiveConfig('audio', apiKey)
+export async function getAudioConfig(apiKey?: string): Promise<AIConfig> {
+  const config = await getActiveConfig('audio', apiKey)
   if (!config) throw new Error('No active audio AI config — 请在设置中添加音频服务')
   return config
 }
 
-export function getAudioConfigById(id?: number | null, apiKey?: string): AIConfig {
+export async function getAudioConfigById(id?: number | null, apiKey?: string): Promise<AIConfig> {
   if (id) {
-    const config = getConfigById(id, apiKey)
+    const config = await getConfigById(id, apiKey)
     if (config) return config
   }
   return getAudioConfig(apiKey)
 }
 
-export function getConfigById(id: number, apiKey?: string): AIConfig | null {
-  const [row] = db.select().from(schema.aiServiceConfigs)
-    .where(eq(schema.aiServiceConfigs.id, id)).all()
+export async function getConfigById(id: number, apiKey?: string): Promise<AIConfig | null> {
+  const [row] = await db.select().from(schema.aiServiceConfigs)
+    .where(eq(schema.aiServiceConfigs.id, id))
   if (!row || !row.isActive) {
     logTaskWarn('AIConfig', 'config-by-id-missing', { configId: id })
     return null

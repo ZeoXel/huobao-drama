@@ -26,11 +26,11 @@ interface GenerateVideoParams {
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
   const config = params.configId
-    ? getConfigById(params.configId, params.apiKey)
-    : getActiveConfig('video', params.apiKey)
+    ? await getConfigById(params.configId, params.apiKey)
+    : await getActiveConfig('video', params.apiKey)
   if (!config) throw new Error('No active video AI config')
 
-  const res = db.insert(schema.videoGenerations).values({
+  const [inserted] = await db.insert(schema.videoGenerations).values({
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
     prompt: params.prompt,
@@ -46,9 +46,9 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     status: 'processing',
     createdAt: ts,
     updatedAt: ts,
-  }).run()
+  }).returning()
 
-  const lastId = Number(res.lastInsertRowid)
+  const lastId = inserted.id
   logTaskStart('VideoTask', 'enqueue', {
     id: lastId,
     provider: config.provider,
@@ -77,7 +77,7 @@ async function processVideoGeneration(id: number, config: AIConfig) {
   const adapter = getVideoAdapter(config.provider)
 
   try {
-    const rows = db.select().from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
+    const rows = await db.select().from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id))
     const record = rows[0]
     if (!record) return
     logTaskProgress('VideoTask', 'build-request', {
@@ -140,10 +140,9 @@ async function processVideoGeneration(id: number, config: AIConfig) {
     }
 
     // 异步模式：更新 taskId，开始轮询
-    db.update(schema.videoGenerations)
+    await db.update(schema.videoGenerations)
       .set({ taskId, status: 'processing', updatedAt: now() })
       .where(eq(schema.videoGenerations.id, id))
-      .run()
     logTaskProgress('VideoTask', 'poll-start', { id, taskId, provider: config.provider })
 
     // Vidu 没有轮询端点，跳过轮询（依赖 Webhook 回调）
@@ -155,10 +154,9 @@ async function processVideoGeneration(id: number, config: AIConfig) {
     pollVideoTask(id, config, taskId!, record.storyboardId)
   } catch (err: any) {
     logTaskError('VideoTask', 'process', { id, provider: config.provider, error: err.message })
-    db.update(schema.videoGenerations)
+    await db.update(schema.videoGenerations)
       .set({ status: 'failed', errorMsg: err.message, updatedAt: now() })
       .where(eq(schema.videoGenerations.id, id))
-      .run()
   }
 }
 
@@ -205,7 +203,7 @@ async function pollVideoTask(id: number, config: AIConfig, taskId: string, story
     await new Promise(r => setTimeout(r, 10000))
     if (Date.now() - startTime > maxDurationMs) {
       logTaskError('VideoTask', 'poll-timeout', { id, taskId, elapsedMs: Date.now() - startTime })
-      db.update(schema.videoGenerations).set({ status: 'failed', errorMsg: 'Polling timeout (10min)', updatedAt: now() }).where(eq(schema.videoGenerations.id, id)).run()
+      await db.update(schema.videoGenerations).set({ status: 'failed', errorMsg: 'Polling timeout (10min)', updatedAt: now() }).where(eq(schema.videoGenerations.id, id))
       return
     }
     try {
@@ -236,10 +234,9 @@ async function pollVideoTask(id: number, config: AIConfig, taskId: string, story
     } catch (err: any) {
       if (i === 299) {
         logTaskError('VideoTask', 'poll-timeout', { id, taskId, error: err.message })
-        db.update(schema.videoGenerations)
+        await db.update(schema.videoGenerations)
           .set({ status: 'failed', errorMsg: `Timeout: ${err.message}`, updatedAt: now() })
           .where(eq(schema.videoGenerations.id, id))
-          .run()
         return
       }
       logTaskWarn('VideoTask', 'poll-retry', { id, taskId, attempt: i + 1, error: err.message })
@@ -249,16 +246,14 @@ async function pollVideoTask(id: number, config: AIConfig, taskId: string, story
 
 async function handleVideoComplete(id: number, videoUrl: string, duration: number | null | undefined, storyboardId?: number | null) {
   const localPath = await downloadFile(videoUrl, 'videos')
-  db.update(schema.videoGenerations)
+  await db.update(schema.videoGenerations)
     .set({ videoUrl, localPath, status: 'completed', completedAt: now(), updatedAt: now() })
     .where(eq(schema.videoGenerations.id, id))
-    .run()
   logTaskSuccess('VideoTask', 'downloaded', { id, localPath, storyboardId, duration })
 
   if (storyboardId) {
-    db.update(schema.storyboards)
+    await db.update(schema.storyboards)
       .set({ videoUrl: localPath, duration: duration || undefined, updatedAt: now() })
       .where(eq(schema.storyboards.id, storyboardId))
-      .run()
   }
 }

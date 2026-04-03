@@ -21,9 +21,9 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
     description: '读取当前剧集中的所有角色信息，用于生成角色图片提示词。',
     inputSchema: z.object({}),
     execute: async () => {
-      const chars = db.select().from(schema.characters)
-        .where(eq(schema.characters.dramaId, dramaId)).all()
-        .filter(c => !c.deletedAt)
+      const allChars = await db.select().from(schema.characters)
+        .where(eq(schema.characters.dramaId, dramaId))
+      const chars = allChars.filter(c => !c.deletedAt)
       return {
         characters: chars.map(c => ({
           id: c.id,
@@ -44,8 +44,8 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
       character_id: z.number(),
     }),
     execute: async ({ character_id }) => {
-      const [c] = db.select().from(schema.characters)
-        .where(eq(schema.characters.id, character_id)).all()
+      const [c] = await db.select().from(schema.characters)
+        .where(eq(schema.characters.id, character_id))
       if (!c) return { error: 'Character not found' }
 
       const parts: string[] = []
@@ -72,9 +72,9 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
     description: '读取当前剧集中的所有场景信息，用于生成场景图片提示词。',
     inputSchema: z.object({}),
     execute: async () => {
-      const scenes = db.select().from(schema.scenes)
-        .where(eq(schema.scenes.dramaId, dramaId)).all()
-        .filter(s => !s.deletedAt)
+      const allScenes = await db.select().from(schema.scenes)
+        .where(eq(schema.scenes.dramaId, dramaId))
+      const scenes = allScenes.filter(s => !s.deletedAt)
       return {
         scenes: scenes.map(s => ({
           id: s.id,
@@ -93,8 +93,8 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
       scene_id: z.number(),
     }),
     execute: async ({ scene_id }) => {
-      const [s] = db.select().from(schema.scenes)
-        .where(eq(schema.scenes.id, scene_id)).all()
+      const [s] = await db.select().from(schema.scenes)
+        .where(eq(schema.scenes.id, scene_id))
       if (!s) return { error: 'Scene not found' }
 
       const parts: string[] = []
@@ -123,9 +123,9 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
     }),
     execute: async ({ shot_ids }) => {
       if (!shot_ids.length) return { shots: [] }
-      const shots = db.select().from(schema.storyboards)
-        .where(eq(schema.storyboards.episodeId, episodeId)).all()
-        .filter(sb => shot_ids.includes(sb.id))
+      const allShots = await db.select().from(schema.storyboards)
+        .where(eq(schema.storyboards.episodeId, episodeId))
+      const shots = allShots.filter(sb => shot_ids.includes(sb.id))
         .map(sb => ({
           shot_number: sb.storyboardNumber,
           description: sb.description || sb.title || '',

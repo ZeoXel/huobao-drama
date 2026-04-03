@@ -25,10 +25,9 @@ function toAbsPath(relativePath: string): string {
  * 拼接一集的所有合成镜头视频
  */
 export async function mergeEpisodeVideos(episodeId: number, dramaId: number): Promise<number> {
-  const storyboards = db.select().from(schema.storyboards)
+  const storyboards = await db.select().from(schema.storyboards)
     .where(eq(schema.storyboards.episodeId, episodeId))
     .orderBy(schema.storyboards.storyboardNumber)
-    .all()
 
   const composedStoryboards = storyboards.filter(sb => !!sb.composedVideoUrl)
   if (composedStoryboards.length !== storyboards.length) {
@@ -44,7 +43,7 @@ export async function mergeEpisodeVideos(episodeId: number, dramaId: number): Pr
 
   // 创建 merge 记录
   const ts = now()
-  const res = db.insert(schema.videoMerges).values({
+  const [insertedMerge] = await db.insert(schema.videoMerges).values({
     episodeId,
     dramaId,
     title: `Episode ${episodeId} Merge`,
@@ -53,16 +52,16 @@ export async function mergeEpisodeVideos(episodeId: number, dramaId: number): Pr
     status: 'processing',
     scenes: JSON.stringify(videos),
     createdAt: ts,
-  }).run()
-  const mergeId = Number(res.lastInsertRowid)
+  }).returning()
+  const mergeId = insertedMerge.id
 
   // 异步执行
   doMerge(mergeId, episodeId, videos).catch(err => {
     logTaskError('MergeTask', 'episode-merge', { mergeId, episodeId, error: err.message })
     console.error(`[Merge] Failed:`, err)
-    db.update(schema.videoMerges)
+    await db.update(schema.videoMerges)
       .set({ status: 'failed', errorMsg: err.message })
-      .where(eq(schema.videoMerges.id, mergeId)).run()
+      .where(eq(schema.videoMerges.id, mergeId))
   })
 
   return mergeId
@@ -116,14 +115,14 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   const mergedRelative = await uploadLocalFile(outputPath, `merged/${outputFilename}`, 'video/mp4')
 
   // 更新 merge 记录
-  db.update(schema.videoMerges)
+  await db.update(schema.videoMerges)
     .set({ status: 'completed', mergedUrl: mergedRelative, duration, completedAt: now() })
-    .where(eq(schema.videoMerges.id, mergeId)).run()
+    .where(eq(schema.videoMerges.id, mergeId))
 
   // 更新 episode
-  db.update(schema.episodes)
+  await db.update(schema.episodes)
     .set({ videoUrl: mergedRelative, updatedAt: now() })
-    .where(eq(schema.episodes.id, episodeId)).run()
+    .where(eq(schema.episodes.id, episodeId))
 
   logTaskSuccess('MergeTask', 'episode-merge', { mergeId, episodeId, output: mergedRelative, duration, clips: videos.length })
 }

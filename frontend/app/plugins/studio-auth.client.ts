@@ -24,6 +24,7 @@ export default defineNuxtPlugin(() => {
 
   if (isInIframe) {
     document.documentElement.classList.add('iframe-mode')
+    document.body.classList.add('iframe-mode')
     restoreFromCache()
 
     window.addEventListener('message', (event) => {
@@ -46,20 +47,40 @@ export default defineNuxtPlugin(() => {
         const theme = event.data?.theme as string
         if (theme === 'dark') {
           document.documentElement.classList.add('dark')
+          localStorage.setItem('theme', 'dark')
         } else if (theme === 'light') {
           document.documentElement.classList.remove('dark')
+          localStorage.setItem('theme', 'light')
         }
       }
     })
 
+    // Height sync — notify Studio parent when content height changes
+    const syncIframeHeight = () => {
+      const height = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+        document.documentElement.offsetHeight,
+      )
+      window.parent.postMessage({ type: 'DRAMA_RESIZE', height }, targetOrigin)
+    }
+
     const router = useRouter()
     router.isReady().then(() => {
       window.parent.postMessage({ type: 'DRAMA_READY' }, targetOrigin)
+      syncIframeHeight()
     })
 
     router.afterEach((to) => {
       window.parent.postMessage({ type: 'DRAMA_ROUTE', path: to.fullPath }, targetOrigin)
     })
+
+    // Observe root element resize for dynamic height sync
+    const rootEl = document.getElementById('__nuxt')
+    if (rootEl && 'ResizeObserver' in window) {
+      new ResizeObserver(() => syncIframeHeight()).observe(rootEl)
+    }
+    window.addEventListener('resize', syncIframeHeight)
 
     setTimeout(() => {
       if (!state.ready) {

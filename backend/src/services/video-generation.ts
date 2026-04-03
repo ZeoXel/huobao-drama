@@ -20,13 +20,14 @@ interface GenerateVideoParams {
   duration?: number
   aspectRatio?: string
   configId?: number
+  apiKey?: string
 }
 
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
   const config = params.configId
-    ? getConfigById(params.configId)
-    : getActiveConfig('video')
+    ? getConfigById(params.configId, params.apiKey)
+    : getActiveConfig('video', params.apiKey)
   if (!config) throw new Error('No active video AI config')
 
   const res = db.insert(schema.videoGenerations).values({

@@ -5,6 +5,7 @@ import { success, badRequest, now } from '../utils/response.js'
 import { generateVoiceSample } from '../services/tts-generation.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
@@ -35,6 +36,7 @@ app.delete('/:id', async (c) => {
 // POST /characters/:id/generate-voice-sample — 生成角色音色试听
 app.post('/:id/generate-voice-sample', async (c) => {
   const id = Number(c.req.param('id'))
+  const apiKey = c.get('apiKey') || ''
   const body = await c.req.json().catch(() => ({}))
   const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
   if (!char) return badRequest(c, 'Character not found')
@@ -46,7 +48,7 @@ app.post('/:id/generate-voice-sample', async (c) => {
 
   try {
     logTaskStart('VoiceSample', 'generate', { characterId: id, characterName: char.name, episodeId: ep.id, voice: char.voiceStyle })
-    const audioPath = await generateVoiceSample(char.name, char.voiceStyle, ep.audioConfigId ?? undefined)
+    const audioPath = await generateVoiceSample(char.name, char.voiceStyle, ep.audioConfigId ?? undefined, apiKey)
     db.update(schema.characters)
       .set({ voiceSampleUrl: audioPath, updatedAt: now() })
       .where(eq(schema.characters.id, id)).run()
@@ -61,6 +63,7 @@ app.post('/:id/generate-voice-sample', async (c) => {
 // POST /characters/:id/generate-image
 app.post('/:id/generate-image', async (c) => {
   const id = Number(c.req.param('id'))
+  const apiKey = c.get('apiKey') || ''
   const body = await c.req.json()
   const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
   if (!char) return badRequest(c, 'Character not found')
@@ -72,7 +75,7 @@ app.post('/:id/generate-image', async (c) => {
   const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
   try {
     logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId })
-    const genId = await generateImage({ characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined, apiKey })
     logTaskSuccess('CharacterImage', 'generate', { characterId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {
@@ -83,6 +86,7 @@ app.post('/:id/generate-image', async (c) => {
 
 // POST /characters/batch-generate-images
 app.post('/batch-generate-images', async (c) => {
+  const apiKey = c.get('apiKey') || ''
   const body = await c.req.json()
   const ids: number[] = body.character_ids || []
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
@@ -94,7 +98,7 @@ app.post('/batch-generate-images', async (c) => {
     if (!char) continue
     const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
     try {
-      const genId = await generateImage({ characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+      const genId = await generateImage({ characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined, apiKey })
       results.push(genId)
     } catch {}
   }

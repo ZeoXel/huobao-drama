@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.js'
 import { success, created, badRequest, now } from '../utils/response.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
@@ -40,6 +41,7 @@ app.put('/:id', async (c) => {
 // POST /scenes/:id/generate-image
 app.post('/:id/generate-image', async (c) => {
   const id = Number(c.req.param('id'))
+  const apiKey = c.get('apiKey') || ''
   const body = await c.req.json()
   const [scene] = db.select().from(schema.scenes).where(eq(schema.scenes.id, id)).all()
   if (!scene) return badRequest(c, 'Scene not found')
@@ -51,7 +53,7 @@ app.post('/:id/generate-image', async (c) => {
   try {
     logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location })
     db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
-    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined, apiKey })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

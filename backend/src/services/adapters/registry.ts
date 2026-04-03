@@ -12,6 +12,7 @@ import { VolcEngineVideoAdapter } from './volcengine-video'
 import { ViduVideoAdapter } from './vidu-video'
 import { AliImageAdapter } from './ali-image'
 import { AliVideoAdapter } from './ali-video'
+import { GatewayVideoAdapter } from './gateway-video'
 import type { ImageProviderAdapter, VideoProviderAdapter, TTSProviderAdapter } from './types'
 
 // 图片 Adapter 注册表
@@ -31,7 +32,8 @@ export const videoAdapters: Record<string, VideoProviderAdapter> = {
   volcengine: new VolcEngineVideoAdapter(),
   vidu: new ViduVideoAdapter(),
   ali: new AliVideoAdapter(),
-  // Chatfire 视频 - 待确认 API 格式
+  gateway: new GatewayVideoAdapter(),
+  chatfire: new GatewayVideoAdapter(),
 }
 
 // TTS Adapter 注册表

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, created, now, badRequest } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
+import '../middleware/context.js'
 import { generateTTS } from '../services/tts-generation.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
@@ -154,6 +155,7 @@ app.put('/:id', async (c) => {
 // POST /storyboards/:id/generate-tts
 app.post('/:id/generate-tts', async (c) => {
   const id = Number(c.req.param('id'))
+  const apiKey = c.get('apiKey') || ''
   const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, id)).all()
   if (!sb) return badRequest(c, '镜头不存在')
   const parsedDialogue = parseDialogueForTTS(sb.dialogue)
@@ -188,7 +190,7 @@ app.post('/:id/generate-tts', async (c) => {
 
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
   try {
-    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, configId: ep?.audioConfigId || null })
+    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, configId: ep?.audioConfigId || null, apiKey })
   db.update(schema.storyboards)
     .set({ ttsAudioUrl: audioPath, updatedAt: now() })
     .where(eq(schema.storyboards.id, id))

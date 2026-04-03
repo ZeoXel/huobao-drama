@@ -18,13 +18,14 @@ interface GenerateImageParams {
   referenceImages?: string[]
   frameType?: string
   configId?: number
+  apiKey?: string
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<number> {
   const ts = now()
   const config = params.configId
-    ? getConfigById(params.configId)
-    : getActiveConfig('image')
+    ? getConfigById(params.configId, params.apiKey)
+    : getActiveConfig('image', params.apiKey)
   if (!config) throw new Error('No active image AI config')
 
   const res = db.insert(schema.imageGenerations).values({

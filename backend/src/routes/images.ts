@@ -43,6 +43,7 @@ app.post('/', async (c) => {
       referenceImages: body.reference_images,
       frameType: body.frame_type,
       configId,
+      apiKey,
     })
 
     const [record] = db.select().from(schema.imageGenerations)

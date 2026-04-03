@@ -33,7 +33,23 @@ export function getTextProviderBaseUrl(config: AIConfig) {
   return config.baseUrl
 }
 
-export function getActiveConfig(serviceType: ServiceType): AIConfig | null {
+/**
+ * Apply GATEWAY_URL and per-user apiKey overrides.
+ * GATEWAY_URL env var, when set, replaces ALL provider baseUrls — all AI requests
+ * route through the gateway. User-level apiKey (from auth context) overrides the
+ * config-level key for per-user quota isolation.
+ */
+function applyOverrides(config: AIConfig, apiKey?: string): AIConfig {
+  const gatewayUrl = (process.env.GATEWAY_URL || '').trim()
+  const userApiKey = (apiKey || '').trim()
+  return {
+    ...config,
+    baseUrl: gatewayUrl || config.baseUrl,
+    apiKey: userApiKey || config.apiKey,
+  }
+}
+
+export function getActiveConfig(serviceType: ServiceType, apiKey?: string): AIConfig | null {
   const rows = db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.serviceType, serviceType))
     .all()
@@ -54,35 +70,36 @@ export function getActiveConfig(serviceType: ServiceType): AIConfig | null {
     model: models[0] || '',
     priority: active.priority,
   })
-  return {
+  const config: AIConfig = {
     provider: active.provider || '',
     baseUrl: active.baseUrl,
     apiKey: active.apiKey,
     model: models[0] || '',
   }
+  return applyOverrides(config, apiKey)
 }
 
-export function getTextConfig(): AIConfig {
-  const config = getActiveConfig('text')
+export function getTextConfig(apiKey?: string): AIConfig {
+  const config = getActiveConfig('text', apiKey)
   if (!config) throw new Error('No active text AI config')
   return config
 }
 
-export function getAudioConfig(): AIConfig {
-  const config = getActiveConfig('audio')
+export function getAudioConfig(apiKey?: string): AIConfig {
+  const config = getActiveConfig('audio', apiKey)
   if (!config) throw new Error('No active audio AI config — 请在设置中添加音频服务')
   return config
 }
 
-export function getAudioConfigById(id?: number | null): AIConfig {
+export function getAudioConfigById(id?: number | null, apiKey?: string): AIConfig {
   if (id) {
-    const config = getConfigById(id)
+    const config = getConfigById(id, apiKey)
     if (config) return config
   }
-  return getAudioConfig()
+  return getAudioConfig(apiKey)
 }
 
-export function getConfigById(id: number): AIConfig | null {
+export function getConfigById(id: number, apiKey?: string): AIConfig | null {
   const [row] = db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.id, id)).all()
   if (!row || !row.isActive) {
@@ -96,10 +113,11 @@ export function getConfigById(id: number): AIConfig | null {
     model: models[0] || '',
     serviceType: row.serviceType,
   })
-  return {
+  const config: AIConfig = {
     provider: row.provider || '',
     baseUrl: row.baseUrl,
     apiKey: row.apiKey,
     model: models[0] || '',
   }
+  return applyOverrides(config, apiKey)
 }

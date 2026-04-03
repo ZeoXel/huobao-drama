@@ -213,7 +213,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Plus, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu } from 'lucide-vue-next'
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'

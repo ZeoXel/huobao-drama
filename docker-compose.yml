@@ -1,0 +1,48 @@
+services:
+  drama:
+    image: crpi-dj1plh5tmmlskal3.cn-hangzhou.personal.cr.aliyuncs.com/studio1111/huobao-drama:latest
+    container_name: huobao-drama
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
+    ports:
+      - "5679:5679"
+    volumes:
+      - huobao-data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=5679
+      - DB_PATH=/app/data/huobao_drama.db
+      - STORAGE_PATH=/app/data/static
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
+      - GATEWAY_URL=${GATEWAY_URL:-}
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - COS_SECRET_ID=${COS_SECRET_ID:-}
+      - COS_SECRET_KEY=${COS_SECRET_KEY:-}
+      - COS_BUCKET=${COS_BUCKET:-}
+      - COS_REGION=${COS_REGION:-}
+      - COS_PUBLIC_URL=${COS_PUBLIC_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5679/api/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - huobao-network
+
+volumes:
+  huobao-data:
+    driver: local
+
+networks:
+  huobao-network:
+    driver: bridge

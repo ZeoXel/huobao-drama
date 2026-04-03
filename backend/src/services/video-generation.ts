@@ -198,9 +198,16 @@ async function normalizeVideoReferenceUrls(raw: string | null | undefined): Prom
 
 async function pollVideoTask(id: number, config: AIConfig, taskId: string, storyboardId?: number | null) {
   const adapter = getVideoAdapter(config.provider)
+  const maxDurationMs = 10 * 60 * 1000 // 10 minutes hard timeout
+  const startTime = Date.now()
 
   for (let i = 0; i < 300; i++) {
     await new Promise(r => setTimeout(r, 10000))
+    if (Date.now() - startTime > maxDurationMs) {
+      logTaskError('VideoTask', 'poll-timeout', { id, taskId, elapsedMs: Date.now() - startTime })
+      db.update(schema.videoGenerations).set({ status: 'failed', errorMsg: 'Polling timeout (10min)', updatedAt: now() }).where(eq(schema.videoGenerations.id, id)).run()
+      return
+    }
     try {
       const { url, method, headers } = adapter.buildPollRequest(config, taskId)
       logTaskProgress('VideoTask', 'poll-request', {

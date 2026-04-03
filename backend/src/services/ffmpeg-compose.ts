@@ -116,7 +116,8 @@ export async function composeStoryboard(storyboardId: number): Promise<string> {
       const srtContent = `1\n00:00:00,500 --> 00:00:${String(Math.min(duration - 1, 59)).padStart(2, '0')},000\n${pureText}\n`
       fs.writeFileSync(subtitlePath, srtContent, 'utf-8')
 
-      const srtRelative = `static/subtitles/${srtFilename}`
+      const { uploadLocalFile } = await import('../utils/storage.js')
+      const srtRelative = await uploadLocalFile(subtitlePath, `subtitles/${srtFilename}`, 'application/x-subrip')
       db.update(schema.storyboards).set({ subtitleUrl: srtRelative, updatedAt: now() })
         .where(eq(schema.storyboards.id, storyboardId)).run()
     }
@@ -169,7 +170,9 @@ export async function composeStoryboard(storyboardId: number): Promise<string> {
         .run()
     })
 
-    const composedRelative = `static/composed/${outputFilename}`
+    // Upload to storage backend (local passthrough or COS upload)
+    const { uploadLocalFile } = await import('../utils/storage.js')
+    const composedRelative = await uploadLocalFile(outputPath, `composed/${outputFilename}`, 'video/mp4')
     db.update(schema.storyboards).set({ composedVideoUrl: composedRelative, status: 'compose_completed', updatedAt: now() })
       .where(eq(schema.storyboards.id, storyboardId)).run()
 

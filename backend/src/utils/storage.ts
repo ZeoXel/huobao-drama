@@ -115,20 +115,21 @@ export function getAbsolutePath(relativePath: string): string {
 }
 
 /**
- * 保存 Base64 编码的图片数据到本地存储
+ * 保存 Base64 编码的图片数据 — 走存储后端
  */
 export async function saveBase64Image(base64Data: string, mimeType: string, subDir: string): Promise<string> {
-  const dir = path.join(STORAGE_ROOT, subDir)
-  fs.mkdirSync(dir, { recursive: true })
-
   const ext = mimeTypeToExt(mimeType)
-  const filename = `${uuid()}${ext}`
-  const filePath = path.join(dir, filename)
-
+  const key = `${subDir}/${uuid()}${ext}`
   const buffer = Buffer.from(base64Data, 'base64')
-  fs.writeFileSync(filePath, buffer)
+  return getStorage().save(key, buffer, mimeType)
+}
 
-  return `static/${subDir}/${filename}`
+/**
+ * 上传本地文件到存储后端（用于 FFmpeg 输出等先写本地再上传的场景）
+ */
+export async function uploadLocalFile(localPath: string, key: string, contentType: string): Promise<string> {
+  const buffer = fs.readFileSync(localPath)
+  return getStorage().save(key, buffer, contentType)
 }
 
 export function readImageAsDataUrl(relativePath: string): string {

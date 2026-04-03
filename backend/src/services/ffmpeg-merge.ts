@@ -111,7 +111,9 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   // 获取时长
   const duration = await getVideoDuration(outputPath)
 
-  const mergedRelative = `static/merged/${outputFilename}`
+  // Upload to storage backend (local passthrough or COS upload)
+  const { uploadLocalFile } = await import('../utils/storage.js')
+  const mergedRelative = await uploadLocalFile(outputPath, `merged/${outputFilename}`, 'video/mp4')
 
   // 更新 merge 记录
   db.update(schema.videoMerges)

@@ -16,7 +16,9 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - PORT=5678
+      - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
       - DB_PATH=/app/data/huobao_drama.db
+      - DATABASE_URL=${DATABASE_URL:-}
       - STORAGE_PATH=/app/data/static
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}

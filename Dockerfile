@@ -67,10 +67,10 @@ COPY skills/ ./skills/
 # Create data directory
 RUN mkdir -p /app/data/static
 
-EXPOSE 5679
+EXPOSE 5678
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:5679/api/v1/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:5678/api/v1/health || exit 1
 
 WORKDIR /app/backend
 CMD ["npx", "tsx", "src/index.ts"]

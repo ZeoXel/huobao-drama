@@ -35,7 +35,7 @@ const corsOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim(
 app.use('*', cors({
   origin: [
     'http://localhost:3013',
-    'http://localhost:5679',
+    'http://localhost:5678',
     ...corsOrigins,
   ],
   credentials: true,
@@ -82,6 +82,6 @@ const distPath = path.join(projectRoot, 'frontend', 'dist')
 app.use('*', serveStatic({ root: distPath }))
 app.get('*', serveStatic({ root: distPath, path: 'index.html' }))
 
-const port = Number(process.env.PORT || 5679)
+const port = Number(process.env.PORT || 5678)
 console.log(`🚀 Huobao Drama TS server on http://localhost:${port}`)
 serve({ fetch: app.fetch, port })

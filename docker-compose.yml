@@ -10,12 +10,12 @@ services:
         NPM_REGISTRY: ${NPM_REGISTRY:-}
         ALPINE_MIRROR: ${ALPINE_MIRROR:-}
     ports:
-      - "5679:5679"
+      - "5678:5678"
     volumes:
       - huobao-data:/app/data
     environment:
       - TZ=Asia/Shanghai
-      - PORT=5679
+      - PORT=5678
       - DB_PATH=/app/data/huobao_drama.db
       - STORAGE_PATH=/app/data/static
       - CORS_ORIGINS=${CORS_ORIGINS:-}
@@ -31,7 +31,7 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5679/api/v1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/api/v1/health"]
       interval: 30s
       timeout: 3s
       retries: 3

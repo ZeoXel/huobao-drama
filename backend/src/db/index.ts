@@ -1,17 +1,79 @@
-import Database from 'better-sqlite3'
-import { drizzle } from 'drizzle-orm/better-sqlite3'
-import * as schema from './schema.js'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../../data/huobao_drama.db')
+const DATABASE_TYPE = (process.env.DATABASE_TYPE || 'sqlite').toLowerCase()
 
-const sqlite = new Database(DB_PATH, { timeout: 30000 })
-sqlite.pragma('journal_mode = WAL')
-sqlite.pragma('busy_timeout = 30000')
+let db: any
+let schema: any
 
-sqlite.exec(`
+if (DATABASE_TYPE === 'postgres') {
+  // PostgreSQL mode — connect to existing Supabase/PG database
+  const pg = await import('postgres')
+  const { drizzle } = await import('drizzle-orm/postgres-js')
+  const pgSchema = await import('./schema-pg.js')
+
+  const DATABASE_URL = process.env.DATABASE_URL || ''
+  if (!DATABASE_URL) throw new Error('DATABASE_URL is required when DATABASE_TYPE=postgres')
+
+  const client = pg.default(DATABASE_URL)
+  db = drizzle(client, { schema: pgSchema })
+  schema = pgSchema
+
+  // Add new columns if missing (safe for existing tables)
+  const ensureColumns = [
+    // Storyboard new fields from TS version
+    `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS first_frame_image TEXT`,
+    `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS last_frame_image TEXT`,
+    `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS reference_images TEXT`,
+    `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS tts_audio_url TEXT`,
+    `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS subtitle_url TEXT`,
+    `ALTER TABLE storyboards ADD COLUMN IF NOT EXISTS composed_video_url TEXT`,
+    // Episode config IDs
+    `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS image_config_id INTEGER`,
+    `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS video_config_id INTEGER`,
+    `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS audio_config_id INTEGER`,
+    // User ID columns (may already exist from Go version)
+    `ALTER TABLE dramas ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE episodes ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE image_generations ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE video_generations ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE video_merges ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE assets ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    // Character voice fields
+    `ALTER TABLE characters ADD COLUMN IF NOT EXISTS voice_sample_url TEXT`,
+    `ALTER TABLE characters ADD COLUMN IF NOT EXISTS voice_provider TEXT`,
+  ]
+  for (const sql of ensureColumns) {
+    try { await client.unsafe(sql) } catch {}
+  }
+
+  // Create indexes
+  const indexes = [
+    'CREATE INDEX IF NOT EXISTS idx_dramas_user_id ON dramas(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_episodes_user_id ON episodes(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_image_generations_user_id ON image_generations(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_video_generations_user_id ON video_generations(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_video_merges_user_id ON video_merges(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_assets_user_id ON assets(user_id)',
+  ]
+  for (const sql of indexes) {
+    try { await client.unsafe(sql) } catch {}
+  }
+
+  console.log('🐘 Connected to PostgreSQL')
+} else {
+  // SQLite mode — local development
+  const Database = (await import('better-sqlite3')).default
+  const { drizzle: drizzleSqlite } = await import('drizzle-orm/better-sqlite3')
+  const sqliteSchema = await import('./schema.js')
+
+  const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, '../../../data/huobao_drama.db')
+  const sqlite = new Database(DB_PATH, { timeout: 30000 })
+  sqlite.pragma('journal_mode = WAL')
+  sqlite.pragma('busy_timeout = 30000')
+
+  sqlite.exec(`
   CREATE TABLE IF NOT EXISTS dramas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -341,31 +403,37 @@ sqlite.exec(`
   );
 `)
 
-function ensureColumn(table: string, column: string, definition: string) {
-  const tableExists = sqlite.prepare(
-    `SELECT 1 as ok FROM sqlite_master WHERE type='table' AND name=? LIMIT 1`,
-  ).get(table) as { ok: number } | undefined
-  if (!tableExists) return
-  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-  if (!columns.some(col => col.name === column)) {
-    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  // ensureColumn helper for SQLite
+  function ensureColumn(table: string, column: string, definition: string) {
+    const tableExists = sqlite.prepare(
+      `SELECT 1 as ok FROM sqlite_master WHERE type='table' AND name=? LIMIT 1`,
+    ).get(table) as { ok: number } | undefined
+    if (!tableExists) return
+    const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    if (!columns.some(col => col.name === column)) {
+      sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+    }
   }
+
+  ensureColumn('episodes', 'image_config_id', 'INTEGER')
+  ensureColumn('episodes', 'video_config_id', 'INTEGER')
+  ensureColumn('episodes', 'audio_config_id', 'INTEGER')
+
+  // --- User isolation columns ---
+  const userIdTables = ['dramas', 'episodes', 'image_generations', 'video_generations', 'video_merges', 'assets']
+  for (const table of userIdTables) {
+    ensureColumn(table, 'user_id', "TEXT NOT NULL DEFAULT 'standalone'")
+  }
+  // Create indexes for user_id filtering
+  for (const table of userIdTables) {
+    sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_user_id ON ${table}(user_id)`)
+  }
+
+  db = drizzleSqlite(sqlite, { schema: sqliteSchema })
+  schema = sqliteSchema
+
+  console.log('📦 Connected to SQLite')
 }
 
-ensureColumn('episodes', 'image_config_id', 'INTEGER')
-ensureColumn('episodes', 'video_config_id', 'INTEGER')
-ensureColumn('episodes', 'audio_config_id', 'INTEGER')
-
-// --- User isolation columns ---
-const userIdTables = ['dramas', 'episodes', 'image_generations', 'video_generations', 'video_merges', 'assets']
-for (const table of userIdTables) {
-  ensureColumn(table, 'user_id', "TEXT NOT NULL DEFAULT 'standalone'")
-}
-// Create indexes for user_id filtering
-for (const table of userIdTables) {
-  sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_user_id ON ${table}(user_id)`)
-}
-
-export const db = drizzle(sqlite, { schema })
-export { schema }
+export { db, schema }
 export type DB = typeof db

@@ -84,6 +84,50 @@
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* === Dark Mode — override CSS variables === */
+html.dark {
+  --bg-base: #0f1117;
+  --bg-0:   #181a23;
+  --bg-1:   #1e2130;
+  --bg-2:   #262a3a;
+  --bg-3:   #333849;
+  --bg-hover: #252838;
+  --bg-active: #2c3045;
+  --bg-input: #1a1d2a;
+  --bg-surface: rgba(24,26,35,0.95);
+  --border:        rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.14);
+  --border-focus:  #5b8aff;
+  --text-0: #e8ecf4;
+  --text-1: #c8d0e0;
+  --text-2: #8a96af;
+  --text-3: #5e6a82;
+  --accent:        #5b8aff;
+  --accent-dark:   #1d4ed8;
+  --accent-bg:     rgba(91,138,255,0.12);
+  --accent-text:   #93b4ff;
+  --accent-glow:   rgba(91,138,255,0.25);
+  --panel-bg: rgba(24,26,35,0.92);
+  --panel-border: rgba(255,255,255,0.06);
+  --shadow-panel: 0 18px 48px rgba(0,0,0,0.3), 0 4px 14px rgba(0,0,0,0.2);
+  --success:   #4ade80;
+  --success-bg: rgba(74,222,128,0.1);
+  --error:     #f87171;
+  --error-bg:  rgba(248,113,113,0.1);
+  --info:      #60a5fa;
+  --info-bg:   rgba(96,165,250,0.1);
+  --warning:   #fbbf24;
+  --warning-bg: rgba(251,191,36,0.1);
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.2);
+  --shadow-sm:  0 3px 10px rgba(0,0,0,0.25);
+  --shadow:     0 8px 20px rgba(0,0,0,0.3);
+  --shadow-lg:  0 14px 30px rgba(0,0,0,0.35);
+  --shadow-card: 0 8px 20px rgba(0,0,0,0.25);
+  --shadow-inset: inset 0 1px 3px rgba(0,0,0,0.2);
+  color-scheme: dark;
+}
+html.dark body { color: var(--text-0); background: var(--bg-base); }
+
 html, body, #__nuxt { height: 100%; }
 
 body {

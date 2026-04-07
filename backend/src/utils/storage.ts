@@ -54,18 +54,22 @@ class LocalStorage implements StorageBackend {
 
 // --- Singleton storage instance ---
 let _storage: StorageBackend | null = null
+let _storageInitPromise: Promise<StorageBackend> | null = null
 
-export function getStorage(): StorageBackend {
-  if (!_storage) {
+export async function getStorage(): Promise<StorageBackend> {
+  if (_storage) return _storage
+  if (_storageInitPromise) return _storageInitPromise
+  _storageInitPromise = (async () => {
     const storageType = (process.env.STORAGE_TYPE || 'local').trim().toLowerCase()
     if (storageType === 'cos') {
-      const { createCOSStorage } = require('./cos-storage.js')
+      const { createCOSStorage } = await import('./cos-storage.js')
       _storage = createCOSStorage()
     } else {
       _storage = new LocalStorage()
     }
-  }
-  return _storage
+    return _storage
+  })()
+  return _storageInitPromise
 }
 
 /**
@@ -75,7 +79,8 @@ export function getStorage(): StorageBackend {
 export async function downloadFile(url: string, subDir: string): Promise<string> {
   const ext = getExtFromUrl(url)
   const key = `${subDir}/${uuid()}${ext}`
-  return getStorage().downloadAndSave(url, key)
+  const storage = await getStorage()
+  return storage.downloadAndSave(url, key)
 }
 
 // --- Everything below stays unchanged from original ---

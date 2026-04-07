@@ -76,7 +76,7 @@ export async function generateTTS(params: TTSParams): Promise<string> {
 
   // 保存到存储后端
   const key = `audio/${uuid()}.${parsed.format || 'mp3'}`
-  const storage = getStorage()
+  const storage = await getStorage()
   const savedPath = await storage.save(key, buffer, 'audio/mpeg')
 
   logTaskSuccess('AudioTask', 'tts-saved', {

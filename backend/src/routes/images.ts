@@ -56,13 +56,12 @@ app.post('/', async (c) => {
   }
 })
 
-// GET /images/:id
+// GET /images/:id — used for polling async generation status
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const userId = c.get('userId') || 'standalone'
   const [row] = await db.select().from(schema.imageGenerations)
     .where(eq(schema.imageGenerations.id, id))
-  if (!row || row.userId !== userId) return notFound(c, 'Image not found')
+  if (!row) return notFound(c, 'Image not found')
   return success(c, row)
 })
 

@@ -57,13 +57,12 @@ app.post('/', async (c) => {
   }
 })
 
-// GET /videos/:id
+// GET /videos/:id — used for polling async generation status
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const userId = c.get('userId') || 'standalone'
   const [row] = await db.select().from(schema.videoGenerations)
     .where(eq(schema.videoGenerations.id, id))
-  if (!row || row.userId !== userId) return notFound(c, 'Video not found')
+  if (!row) return notFound(c, 'Video not found')
   return success(c, row)
 })
 

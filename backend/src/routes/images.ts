@@ -44,6 +44,7 @@ app.post('/', async (c) => {
       frameType: body.frame_type,
       configId,
       apiKey,
+      userId: c.get('userId') || 'standalone',
     })
 
     const [record] = await db.select().from(schema.imageGenerations)

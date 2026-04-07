@@ -21,6 +21,7 @@ interface GenerateVideoParams {
   aspectRatio?: string
   configId?: number
   apiKey?: string
+  userId?: string
 }
 
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
@@ -43,6 +44,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     referenceImageUrls: params.referenceImageUrls ? JSON.stringify(params.referenceImageUrls) : null,
     duration: params.duration || 5,
     aspectRatio: params.aspectRatio || '16:9',
+    userId: params.userId || 'standalone',
     status: 'processing',
     createdAt: ts,
     updatedAt: ts,

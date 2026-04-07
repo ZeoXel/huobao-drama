@@ -45,6 +45,7 @@ app.post('/', async (c) => {
       aspectRatio: body.aspect_ratio,
       configId,
       apiKey,
+      userId: c.get('userId') || 'standalone',
     })
 
     const [record] = await db.select().from(schema.videoGenerations)

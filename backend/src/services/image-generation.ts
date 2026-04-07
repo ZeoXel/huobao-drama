@@ -19,6 +19,7 @@ interface GenerateImageParams {
   frameType?: string
   configId?: number
   apiKey?: string
+  userId?: string
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<number> {
@@ -39,6 +40,7 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     size: params.size || '1920x1080',
     frameType: params.frameType,
     referenceImages: params.referenceImages ? JSON.stringify(params.referenceImages) : null,
+    userId: params.userId || 'standalone',
     status: 'processing',
     createdAt: ts,
     updatedAt: ts,

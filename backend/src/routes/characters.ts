@@ -72,7 +72,7 @@ app.post('/:id/generate-image', async (c) => {
   const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id)))
   if (!ep) return badRequest(c, 'Episode not found')
 
-  const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  const prompt = body.prompt || `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
   try {
     logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId })
     const genId = await generateImage({ characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined, apiKey, userId: c.get('userId') || 'standalone' })

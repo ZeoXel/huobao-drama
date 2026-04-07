@@ -752,27 +752,41 @@
             </div>
             <div class="asset-grid">
               <div v-for="c in visualChars" :key="c.id" class="card asset-card">
-                <div class="asset-cover">
-                  <img
-                    v-if="c.image_url || c.imageUrl"
-                    :src="assetUrl(c.image_url || c.imageUrl)"
-                    class="previewable-image"
-                    @click.stop="openImageViewer(assetUrl(c.image_url || c.imageUrl), `${c.name} 角色形象`)"
-                  />
-                  <div v-else class="asset-cover-empty">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <template v-if="!flippedCards[`char-${c.id}`]">
+                  <div class="asset-cover">
+                    <img
+                      v-if="c.image_url || c.imageUrl"
+                      :src="assetUrl(c.image_url || c.imageUrl)"
+                      class="previewable-image"
+                      @click.stop="openImageViewer(assetUrl(c.image_url || c.imageUrl), `${c.name} 角色形象`)"
+                    />
+                    <div v-else class="asset-cover-empty">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <span class="asset-cover-badge" :class="(c.image_url || c.imageUrl) ? 'is-ready' : (isPendingCharImage(c.id) ? 'is-pending' : '')">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
                   </div>
-                  <span class="asset-cover-badge" :class="(c.image_url || c.imageUrl) ? 'is-ready' : (isPendingCharImage(c.id) ? 'is-pending' : '')">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
-                </div>
-                <div class="asset-body">
-                  <div class="asset-name">{{ c.name }}</div>
-                  <div class="asset-meta dim">{{ c.role || '角色' }}</div>
-                </div>
-                <div class="asset-foot">
-                  <span :class="['dot', (c.image_url || c.imageUrl) && 'ok', isPendingCharImage(c.id) && 'pending']" />
-                  <span class="dim" style="font-size:10px">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
-                  <button class="btn btn-sm ml-auto" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id)">{{ isPendingCharImage(c.id) ? '生成中' : '生成' }}</button>
-                </div>
+                  <div class="asset-body">
+                    <div class="asset-name">{{ c.name }}</div>
+                    <div class="asset-meta dim">{{ c.role || '角色' }}</div>
+                  </div>
+                  <div class="asset-foot">
+                    <span :class="['dot', (c.image_url || c.imageUrl) && 'ok', isPendingCharImage(c.id) && 'pending']" />
+                    <span class="dim" style="font-size:10px">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
+                    <button class="btn btn-sm btn-ghost ml-auto" title="编辑提示词" @click="flipCard('char', c.id)">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn btn-sm" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id, cardPrompts[`char-${c.id}`]?.trim())">{{ isPendingCharImage(c.id) ? '生成中' : '生成' }}</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="prompt-face">
+                    <textarea class="textarea prompt-textarea" v-model="cardPrompts[`char-${c.id}`]" placeholder="描述角色外观特征..." />
+                  </div>
+                  <div class="asset-foot">
+                    <button class="btn btn-sm" @click="cardPrompts[`char-${c.id}`] = getDefaultCharPrompt(c)">重置</button>
+                    <button class="btn btn-sm ml-auto" @click="flipCard('char', c.id)">完成</button>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -791,27 +805,41 @@
             </div>
             <div class="asset-grid">
               <div v-for="s in scenes" :key="s.id" class="card asset-card">
-                <div class="asset-cover wide">
-                  <img
-                    v-if="s.image_url || s.imageUrl"
-                    :src="assetUrl(s.image_url || s.imageUrl)"
-                    class="previewable-image"
-                    @click.stop="openImageViewer(assetUrl(s.image_url || s.imageUrl), `${s.location} 场景图`)"
-                  />
-                  <div v-else class="asset-cover-empty">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <template v-if="!flippedCards[`scene-${s.id}`]">
+                  <div class="asset-cover wide">
+                    <img
+                      v-if="s.image_url || s.imageUrl"
+                      :src="assetUrl(s.image_url || s.imageUrl)"
+                      class="previewable-image"
+                      @click.stop="openImageViewer(assetUrl(s.image_url || s.imageUrl), `${s.location} 场景图`)"
+                    />
+                    <div v-else class="asset-cover-empty">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    </div>
+                    <span class="asset-cover-badge" :class="(s.image_url || s.imageUrl) ? 'is-ready' : (isPendingSceneImage(s.id) ? 'is-pending' : '')">{{ (s.image_url || s.imageUrl) ? '已生成' : (isPendingSceneImage(s.id) ? '生成中' : '待生成') }}</span>
                   </div>
-                  <span class="asset-cover-badge" :class="(s.image_url || s.imageUrl) ? 'is-ready' : (isPendingSceneImage(s.id) ? 'is-pending' : '')">{{ (s.image_url || s.imageUrl) ? '已生成' : (isPendingSceneImage(s.id) ? '生成中' : '待生成') }}</span>
-                </div>
-                <div class="asset-body">
-                  <div class="asset-name">{{ s.location }}</div>
-                  <div class="asset-meta dim">{{ s.time || '—' }}</div>
-                </div>
-                <div class="asset-foot">
-                  <span :class="['dot', (s.image_url || s.imageUrl) && 'ok', isPendingSceneImage(s.id) && 'pending']" />
-                  <span class="dim" style="font-size:10px">{{ (s.image_url || s.imageUrl) ? '已生成' : (isPendingSceneImage(s.id) ? '生成中' : '待生成') }}</span>
-                  <button class="btn btn-sm ml-auto" :disabled="isPendingSceneImage(s.id)" @click="genSceneImg(s.id)">{{ isPendingSceneImage(s.id) ? '生成中' : '生成' }}</button>
-                </div>
+                  <div class="asset-body">
+                    <div class="asset-name">{{ s.location }}</div>
+                    <div class="asset-meta dim">{{ s.time || '—' }}</div>
+                  </div>
+                  <div class="asset-foot">
+                    <span :class="['dot', (s.image_url || s.imageUrl) && 'ok', isPendingSceneImage(s.id) && 'pending']" />
+                    <span class="dim" style="font-size:10px">{{ (s.image_url || s.imageUrl) ? '已生成' : (isPendingSceneImage(s.id) ? '生成中' : '待生成') }}</span>
+                    <button class="btn btn-sm btn-ghost ml-auto" title="编辑提示词" @click="flipCard('scene', s.id)">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn btn-sm" :disabled="isPendingSceneImage(s.id)" @click="genSceneImg(s.id, cardPrompts[`scene-${s.id}`]?.trim())">{{ isPendingSceneImage(s.id) ? '生成中' : '生成' }}</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="prompt-face">
+                    <textarea class="textarea prompt-textarea" v-model="cardPrompts[`scene-${s.id}`]" placeholder="描述场景氛围、光线、环境..." />
+                  </div>
+                  <div class="asset-foot">
+                    <button class="btn btn-sm" @click="cardPrompts[`scene-${s.id}`] = getDefaultScenePrompt(s)">重置</button>
+                    <button class="btn btn-sm ml-auto" @click="flipCard('scene', s.id)">完成</button>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -2495,12 +2523,37 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
   })()
 }
 
-async function genCharImg(id) {
+const flippedCards = reactive({})
+const cardPrompts = reactive({})
+
+function getDefaultCharPrompt(c) {
+  return `${c.name}, ${c.appearance || c.description || '人物立绘'}, 高质量, 正面, 白色背景`
+}
+function getDefaultScenePrompt(s) {
+  return s.prompt || `${s.location}, ${s.time || ''}, 高质量场景, 电影感`
+}
+
+function flipCard(type, id) {
+  const key = `${type}-${id}`
+  flippedCards[key] = !flippedCards[key]
+  if (flippedCards[key] && !cardPrompts[key]) {
+    if (type === 'char') {
+      const c = chars.value.find(c => c.id === id)
+      cardPrompts[key] = c ? getDefaultCharPrompt(c) : ''
+    } else {
+      const s = scenes.value.find(s => s.id === id)
+      cardPrompts[key] = s ? getDefaultScenePrompt(s) : ''
+    }
+  }
+}
+
+async function genCharImg(id, customPrompt) {
+  flippedCards[`char-${id}`] = false
   try {
     if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
     const oldChar = chars.value.find(c => c.id === id)
     const oldUrl = oldChar?.image_url || oldChar?.imageUrl || ''
-    await characterAPI.generateImage(id, epId.value)
+    await characterAPI.generateImage(id, epId.value, customPrompt)
     toast.success('角色图片生成中')
     await refresh()
     watchAsyncResult(() => {
@@ -2533,12 +2586,13 @@ function batchCharImages() {
     toast.error(e.message)
   })
 }
-async function genSceneImg(id) {
+async function genSceneImg(id, customPrompt) {
+  flippedCards[`scene-${id}`] = false
   try {
     if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
     const oldScene = scenes.value.find(s => s.id === id)
     const oldUrl = oldScene?.image_url || oldScene?.imageUrl || ''
-    await sceneAPI.generateImage(id, epId.value)
+    await sceneAPI.generateImage(id, epId.value, customPrompt)
     toast.success('场景图片生成中')
     await refresh()
     watchAsyncResult(() => {
@@ -3670,6 +3724,15 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .asset-name { font-size: 13px; font-weight: 600; }
 .asset-meta { font-size: 11px; }
 .asset-foot { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-top: 1px solid var(--border); }
+
+/* Prompt Face */
+.prompt-face {
+  flex: 1; padding: 10px; display: flex; flex-direction: column;
+}
+.prompt-face .prompt-textarea {
+  flex: 1; font-size: 12px; line-height: 1.65; padding: 8px 10px;
+  resize: none; min-height: 120px;
+}
 
 /* Frame grid */
 .frame-grid { display: flex; flex-direction: column; gap: 8px; }

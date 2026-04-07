@@ -103,12 +103,21 @@ app.get('/:id/scenes', async (c) => {
   const [drama] = await db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId))
   if (!drama || drama.userId !== userId) return notFound(c, 'Episode not found')
 
+  // Try junction table first, then fall back to scenes.episode_id (Go version stored it directly)
   const links = await db.select().from(schema.episodeScenes)
     .where(eq(schema.episodeScenes.episodeId, episodeId))
   const sceneIds = links.map(l => l.sceneId)
-  if (!sceneIds.length) return success(c, [])
-  const allScenes = await db.select().from(schema.scenes)
-  const result = allScenes.filter(sc => sceneIds.includes(sc.id) && !sc.deletedAt)
+
+  let result: any[]
+  if (sceneIds.length) {
+    const allScenes = await db.select().from(schema.scenes)
+    result = allScenes.filter(sc => sceneIds.includes(sc.id) && !sc.deletedAt)
+  } else {
+    // Fallback: scenes linked directly via episode_id column
+    const directScenes = await db.select().from(schema.scenes)
+      .where(eq(schema.scenes.episodeId, episodeId))
+    result = directScenes.filter(sc => !sc.deletedAt)
+  }
   return success(c, toSnakeCaseArray(result))
 })
 

@@ -23,8 +23,9 @@ export class VolcEngineImageAdapter implements ImageProviderAdapter {
 
     if (isGateway()) {
       // Gateway: OpenAI-compatible format (/v1/images/generations)
+      // Seedream 5.0 requires minimum 3686400 pixels; default to 2048x2048
       const body: any = { model, prompt: record.prompt }
-      if (record.size) body.size = record.size
+      body.size = record.size || '2048x2048'
       if (record.referenceImages) {
         try {
           const refs = JSON.parse(record.referenceImages)

@@ -39,8 +39,13 @@ export class MiniMaxTTSAdapter implements TTSProviderAdapter {
       'Content-Type': 'application/json',
     }
 
+    // Gateway requires "provider/model" format; direct API uses bare model name
+    const rawModel = params.model || 'speech-2.8-hd'
+    const isGateway = !!process.env.GATEWAY_URL?.trim()
+    const model = isGateway && !rawModel.includes('/') ? `minimax/${rawModel}` : rawModel
+
     const body: any = {
-      model: params.model || 'speech-2.8-hd',
+      model,
       text: params.text,
       stream: false,
       voice_setting: {

@@ -39,11 +39,9 @@ export class MiniMaxTTSAdapter implements TTSProviderAdapter {
       'Content-Type': 'application/json',
     }
 
-    // Use config.model (from DB) as primary, params.model as override
-    const rawModel = params.model || config.model || 'speech-02-hd'
-    // Gateway requires "provider/model" format; direct API uses bare model name
-    const isGateway = !!process.env.GATEWAY_URL?.trim()
-    const model = isGateway && !rawModel.includes('/') ? `minimax/${rawModel}` : rawModel
+    // MiniMax native API uses bare model name (e.g. "speech-02-hd")
+    // Gateway routes via /minimax/ sub-path, so no provider prefix needed in body
+    const model = params.model || config.model || 'speech-02-hd'
 
     const body: any = {
       model,

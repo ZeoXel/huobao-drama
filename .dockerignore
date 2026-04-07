@@ -8,6 +8,7 @@ data
 .git
 .github
 .vercel
+.env*
 docs
 *.md
 !README.md

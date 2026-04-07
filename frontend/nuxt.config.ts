@@ -13,6 +13,12 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/png', href: '/favicon.png' },
         { rel: 'shortcut icon', type: 'image/png', href: '/favicon.png' },
       ],
+      script: [
+        {
+          innerHTML: `(function(){var t=localStorage.getItem('theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}if(window.self!==window.top){document.documentElement.classList.add('iframe-mode');document.body&&document.body.classList.add('iframe-mode')}})()`,
+          type: 'text/javascript',
+        },
+      ],
     },
   },
   vite: {

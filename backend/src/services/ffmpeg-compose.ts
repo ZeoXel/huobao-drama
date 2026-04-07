@@ -4,6 +4,7 @@
 import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { fileURLToPath } from 'url'
 import { execFileSync } from 'child_process'
 import { v4 as uuid } from 'uuid'
@@ -20,10 +21,29 @@ let subtitleFilterSupport: boolean | null = null
 const IGNORE_TTS_SPEAKERS = /^(环境音|环境声|音效|效果音|sfx|sound ?effect|bgm|背景音|背景音乐|ambient)$/i
 const IGNORE_TTS_TEXT = /^(无|无对白|无台词|无旁白|无需配音|无需对白|none|null|n\/a|na|环境音|环境声|音效|效果音|纯音效|纯环境音|只有环境音|仅环境音|背景音|背景音乐|bgm|sfx|ambient)$/i
 
-function toAbsPath(relativePath: string): string {
-  if (path.isAbsolute(relativePath)) return relativePath
-  if (relativePath.startsWith('static/')) return path.join(DATA_ROOT, relativePath)
-  return path.join(STORAGE_ROOT, relativePath)
+/** Track temp files to clean up after compose */
+const tempFiles: string[] = []
+
+async function toAbsPath(fileRef: string): Promise<string> {
+  if (!fileRef) return ''
+  // Absolute URL (COS etc.) — download to temp file
+  if (fileRef.startsWith('http://') || fileRef.startsWith('https://')) {
+    const ext = path.extname(new URL(fileRef).pathname) || '.bin'
+    const tmpPath = path.join(os.tmpdir(), `drama-compose-${uuid()}${ext}`)
+    const resp = await fetch(fileRef)
+    if (!resp.ok) throw new Error(`Failed to download ${fileRef}: ${resp.status}`)
+    fs.writeFileSync(tmpPath, Buffer.from(await resp.arrayBuffer()))
+    tempFiles.push(tmpPath)
+    return tmpPath
+  }
+  if (path.isAbsolute(fileRef)) return fileRef
+  if (fileRef.startsWith('static/')) return path.join(DATA_ROOT, fileRef)
+  return path.join(STORAGE_ROOT, fileRef)
+}
+
+function cleanupTempFiles() {
+  for (const f of tempFiles) { try { fs.unlinkSync(f) } catch {} }
+  tempFiles.length = 0
 }
 
 function supportsSubtitleFilter(): boolean {
@@ -64,7 +84,7 @@ export async function composeStoryboard(storyboardId: number, apiKey?: string): 
     episodeId: sb.episodeId,
   })
 
-  const videoPath = toAbsPath(sb.videoUrl)
+  const videoPath = await toAbsPath(sb.videoUrl)
   let audioPath: string | null = null
   let subtitlePath: string | null = null
   const parsedDialogue = parseDialogueForTTS(sb.dialogue)
@@ -73,7 +93,7 @@ export async function composeStoryboard(storyboardId: number, apiKey?: string): 
   try {
     if (!parsedDialogue.ignorable) {
       if (sb.ttsAudioUrl) {
-        const existingAudioPath = toAbsPath(sb.ttsAudioUrl)
+        const existingAudioPath = await toAbsPath(sb.ttsAudioUrl)
         if (fs.existsSync(existingAudioPath)) {
           audioPath = existingAudioPath
         }
@@ -96,7 +116,7 @@ export async function composeStoryboard(storyboardId: number, apiKey?: string): 
         if (pureDialogue) {
           logTaskProgress('ComposeTask', 'generate-inline-tts', { storyboardId, voiceId, textPreview: pureDialogue.slice(0, 40) })
           const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, configId: ep?.audioConfigId ?? undefined, apiKey })
-          audioPath = toAbsPath(ttsPath)
+          audioPath = await toAbsPath(ttsPath)
           await db.update(schema.storyboards).set({ ttsAudioUrl: ttsPath, updatedAt: now() })
             .where(eq(schema.storyboards.id, storyboardId))
         }
@@ -186,5 +206,7 @@ export async function composeStoryboard(storyboardId: number, apiKey?: string): 
       .set({ status: 'compose_failed', composedVideoUrl: null, updatedAt: now() })
       .where(eq(schema.storyboards.id, storyboardId))
     throw err
+  } finally {
+    cleanupTempFiles()
   }
 }

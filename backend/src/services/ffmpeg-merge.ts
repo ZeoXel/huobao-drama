@@ -4,6 +4,7 @@
 import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { fileURLToPath } from 'url'
 import { v4 as uuid } from 'uuid'
 import { db, schema } from '../db/index.js'
@@ -15,10 +16,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STORAGE_ROOT = process.env.STORAGE_PATH || path.resolve(__dirname, '../../../data/static')
 const DATA_ROOT = path.resolve(__dirname, '../../../data')
 
-function toAbsPath(relativePath: string): string {
-  if (path.isAbsolute(relativePath)) return relativePath
-  if (relativePath.startsWith('static/')) return path.join(DATA_ROOT, relativePath)
-  return path.join(STORAGE_ROOT, relativePath)
+const mergeTempFiles: string[] = []
+
+async function toAbsPath(fileRef: string): Promise<string> {
+  if (!fileRef) return ''
+  if (fileRef.startsWith('http://') || fileRef.startsWith('https://')) {
+    const ext = path.extname(new URL(fileRef).pathname) || '.bin'
+    const tmpPath = path.join(os.tmpdir(), `drama-merge-${uuid()}${ext}`)
+    const resp = await fetch(fileRef)
+    if (!resp.ok) throw new Error(`Failed to download ${fileRef}: ${resp.status}`)
+    fs.writeFileSync(tmpPath, Buffer.from(await resp.arrayBuffer()))
+    mergeTempFiles.push(tmpPath)
+    return tmpPath
+  }
+  if (path.isAbsolute(fileRef)) return fileRef
+  if (fileRef.startsWith('static/')) return path.join(DATA_ROOT, fileRef)
+  return path.join(STORAGE_ROOT, fileRef)
+}
+
+function cleanupMergeTempFiles() {
+  for (const f of mergeTempFiles) { try { fs.unlinkSync(f) } catch {} }
+  mergeTempFiles.length = 0
 }
 
 /**
@@ -73,8 +91,9 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   fs.mkdirSync(listDir, { recursive: true })
   const listPath = path.join(listDir, `${uuid()}.txt`)
 
-  const listContent = videos
-    .map(v => `file '${toAbsPath(v)}'`)
+  const resolvedPaths = await Promise.all(videos.map(v => toAbsPath(v)))
+  const listContent = resolvedPaths
+    .map(p => `file '${p}'`)
     .join('\n')
   fs.writeFileSync(listPath, listContent, 'utf-8')
 

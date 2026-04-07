@@ -2498,12 +2498,15 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
 async function genCharImg(id) {
   try {
     if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
+    const oldChar = chars.value.find(c => c.id === id)
+    const oldUrl = oldChar?.image_url || oldChar?.imageUrl || ''
     await characterAPI.generateImage(id, epId.value)
     toast.success('角色图片生成中')
     await refresh()
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
-      const done = !!(char?.image_url || char?.imageUrl)
+      const newUrl = char?.image_url || char?.imageUrl || ''
+      const done = !!newUrl && newUrl !== oldUrl
       if (done) pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
       return done
     })
@@ -2533,12 +2536,15 @@ function batchCharImages() {
 async function genSceneImg(id) {
   try {
     if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
+    const oldScene = scenes.value.find(s => s.id === id)
+    const oldUrl = oldScene?.image_url || oldScene?.imageUrl || ''
     await sceneAPI.generateImage(id, epId.value)
     toast.success('场景图片生成中')
     await refresh()
     watchAsyncResult(() => {
       const scene = scenes.value.find(s => s.id === id)
-      const done = !!(scene?.image_url || scene?.imageUrl)
+      const newUrl = scene?.image_url || scene?.imageUrl || ''
+      const done = !!newUrl && newUrl !== oldUrl
       if (done) pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
       return done
     })

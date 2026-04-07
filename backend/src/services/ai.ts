@@ -35,19 +35,15 @@ export function getTextProviderBaseUrl(config: AIConfig) {
 
 /**
  * Gateway sub-path per provider.
- * Adapters add their own prefix (e.g. /v1, /api/v3) to baseUrl.
- * The gateway routes provider-specific traffic under sub-paths:
- *   volcengine → GATEWAY/volcengine  (+ adapter adds /api/v3/...)
- *   minimax    → GATEWAY/minimax     (+ adapter adds /v1/...)
- *   vidu       → GATEWAY/vidu        (+ adapter adds /ent/v2/...)
- *   ali        → GATEWAY/ali         (+ adapter adds /api/v1/...)
- *   others     → GATEWAY             (+ adapter adds /v1/... or /v1beta/...)
+ * Most providers use OpenAI-compatible /v1/* via the gateway root.
+ * Only providers with non-OpenAI native APIs need sub-paths:
+ *   minimax → GATEWAY/minimax (native /v1/t2a_v2 etc.)
+ *   kling   → GATEWAY/kling   (native /v1/videos/*)
+ * volcengine, vidu, ali route via model name through /v1/* endpoints.
  */
 const GATEWAY_PROVIDER_PATH: Record<string, string> = {
-  volcengine: '/volcengine',
   minimax: '/minimax',
-  vidu: '/vidu',
-  ali: '/ali',
+  kling: '/kling',
 }
 
 /**

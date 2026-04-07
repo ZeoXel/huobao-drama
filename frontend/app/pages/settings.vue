@@ -253,11 +253,16 @@ const modelOptions = {
     { label: 'Claude Sonnet 4', value: 'claude-sonnet-4-20250514', provider: 'openai' },
   ],
   image: [
-    { label: 'SeedDream 5.0', value: 'doubao-seedream-5-0-t2i-250428', provider: 'volcengine' },
+    { label: 'SeedDream 5.0', value: 'doubao-seedream-5-0-260128', provider: 'volcengine' },
+    { label: 'SeedDream 5.0 Lite', value: 'doubao-seedream-5-0-lite', provider: 'volcengine' },
     { label: 'SeedDream 4.5', value: 'doubao-seedream-4-5-251128', provider: 'volcengine' },
+    { label: 'SeedDream 3.0 T2I', value: 'doubao-seedream-3-0-t2i-250415', provider: 'volcengine' },
+    { label: 'SeedEdit 3.0 I2I', value: 'doubao-seededit-3-0-i2i-250628', provider: 'volcengine' },
     { label: 'DALL-E 3', value: 'dall-e-3', provider: 'openai' },
   ],
   video: [
+    { label: 'Seedance 2.0', value: 'doubao-seedance-2-0-260128', provider: 'volcengine' },
+    { label: 'Seedance 2.0 Fast', value: 'doubao-seedance-2-0-fast-260128', provider: 'volcengine' },
     { label: 'Seedance 1.5 Pro', value: 'doubao-seedance-1-5-pro-251215', provider: 'volcengine' },
     { label: 'Seedance 1.5 Lite', value: 'doubao-seedance-1-5-lite-250428', provider: 'volcengine' },
     { label: 'Vidu Q3 Turbo', value: 'viduq3-turbo', provider: 'vidu' },
@@ -286,7 +291,7 @@ const modelSelectOptions = computed(() => {
   return result
 })
 
-const defaultModels = { text: 'gemini-3-flash-preview', image: 'doubao-seedream-5-0-t2i-250428', video: 'doubao-seedance-1-5-pro-251215', audio: 'speech-02-hd' }
+const defaultModels = { text: 'gemini-3-flash-preview', image: 'doubao-seedream-5-0-260128', video: 'doubao-seedance-2-0-260128', audio: 'speech-02-hd' }
 const selectedModels = reactive({ ...defaultModels })
 const saving = ref(false)
 
@@ -742,4 +747,13 @@ onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
 .modal { padding: 28px; width: 420px; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow-elevated); }
 .modal-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 6px; }
+
+</style>
+
+<style>
+/* Dark Mode */
+html.dark .nav-advanced { border-color: rgba(255,255,255,0.06); }
+html.dark .advanced-slider { background: rgba(255,255,255,0.12); }
+html.dark .advanced-slider::after { background: var(--bg-0); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+html.dark .skills-agent-item.active .skill-count-badge { background: rgba(255,255,255,0.15); }
 </style>

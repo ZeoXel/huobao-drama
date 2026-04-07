@@ -56,6 +56,31 @@ if (DATABASE_TYPE === 'postgres') {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_episode_scenes_episode_id ON episode_scenes(episode_id)`,
     `CREATE INDEX IF NOT EXISTS idx_episode_scenes_scene_id ON episode_scenes(scene_id)`,
+    // New tables added by TS version (not in Go version)
+    `CREATE TABLE IF NOT EXISTS agent_configs (
+      id SERIAL PRIMARY KEY,
+      agent_type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      model TEXT,
+      system_prompt TEXT,
+      temperature REAL,
+      max_tokens INTEGER,
+      max_iterations INTEGER,
+      is_active BOOLEAN DEFAULT true,
+      created_at TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT '',
+      deleted_at TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS ai_voices (
+      id SERIAL PRIMARY KEY,
+      voice_id TEXT NOT NULL UNIQUE,
+      voice_name TEXT NOT NULL,
+      description TEXT,
+      language TEXT,
+      provider TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT ''
+    )`,
   ]
   for (const sql of ensureColumns) {
     try { await client.unsafe(sql) } catch {}

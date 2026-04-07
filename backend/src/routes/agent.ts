@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { createAgent, validAgentTypes } from '../agents/index.js'
 import { success, badRequest } from '../utils/response.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
@@ -44,7 +45,16 @@ app.post('/:type/chat', async (c) => {
     return badRequest(c, 'drama_id and episode_id are required')
   }
 
-  const agent = await createAgent(agentType, episode_id, drama_id)
+  const apiKey = c.get('apiKey') || ''
+
+  let agent
+  try {
+    agent = await createAgent(agentType, episode_id, drama_id, apiKey)
+  } catch (err: any) {
+    logTaskError('Agent', agentType, { reason: 'createAgent failed', error: err.message })
+    console.error('[Agent] createAgent error:', err.stack || err)
+    return badRequest(c, `Agent init failed: ${err.message}`)
+  }
   if (!agent) {
     logTaskError('Agent', agentType, { reason: 'agent not found' })
     return badRequest(c, 'Agent not found')

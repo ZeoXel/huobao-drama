@@ -175,8 +175,8 @@ async function getAgentConfig(agentType: string) {
   return rows.find(r => r.isActive) || rows[0] || null
 }
 
-async function getModel(dbConfig: any) {
-  const textConfig = await getTextConfig()
+async function getModel(dbConfig: any, apiKey?: string) {
+  const textConfig = await getTextConfig(apiKey)
   const resolvedBaseURL = getTextProviderBaseUrl(textConfig)
   logTaskProgress('AIConfig', 'text-model-endpoint', {
     provider: textConfig.provider,
@@ -191,12 +191,12 @@ async function getModel(dbConfig: any) {
   return provider.chat(modelName)
 }
 
-export async function createAgent(type: string, episodeId: number, dramaId: number): Promise<Agent | null> {
+export async function createAgent(type: string, episodeId: number, dramaId: number, apiKey?: string): Promise<Agent | null> {
   const defaults = DEFAULT_PROMPTS[type]
   if (!defaults) return null
 
   const dbConfig = await getAgentConfig(type)
-  const model = await getModel(dbConfig)
+  const model = await getModel(dbConfig, apiKey)
   const baseInstructions = dbConfig?.systemPrompt?.trim() || defaults.instructions
   const skillInstructions = loadAgentSkills(type)
   const instructions = skillInstructions

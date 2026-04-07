@@ -14,7 +14,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
-RUN npm run build
+RUN npm run generate
 
 # ==================== Stage 2: Install backend deps ====================
 FROM ${DOCKER_REGISTRY:-}node:20-alpine AS backend-builder

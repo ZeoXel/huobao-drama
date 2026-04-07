@@ -5,15 +5,17 @@ import { success, badRequest } from '../utils/response.js'
 import { composeStoryboard } from '../services/ffmpeg-compose.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 import { toSnakeCase } from '../utils/transform.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
 // POST /storyboards/:id/compose — 合成单个镜头
 app.post('/storyboards/:id/compose', async (c) => {
   const id = Number(c.req.param('id'))
+  const apiKey = c.get('apiKey') || ''
   try {
     logTaskStart('ComposeAPI', 'single-compose', { storyboardId: id })
-    const composedUrl = await composeStoryboard(id)
+    const composedUrl = await composeStoryboard(id, apiKey)
     logTaskSuccess('ComposeAPI', 'single-compose', { storyboardId: id, output: composedUrl })
     return success(c, { id, composed_video_url: composedUrl })
   } catch (err: any) {
@@ -39,10 +41,11 @@ app.post('/episodes/:id/compose-all', async (c) => {
     .set({ status: 'compose_processing' })
     .where(eq(schema.storyboards.episodeId, episodeId))
 
+  const batchApiKey = c.get('apiKey') || ''
   ;(async () => {
     for (const sb of withVideo) {
       try {
-        await composeStoryboard(sb.id)
+        await composeStoryboard(sb.id, batchApiKey)
       } catch (err: any) {
         logTaskError('ComposeAPI', 'batch-item', { storyboardId: sb.id, episodeId, error: err.message })
       }

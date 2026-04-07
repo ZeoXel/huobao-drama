@@ -126,7 +126,8 @@ export async function saveBase64Image(base64Data: string, mimeType: string, subD
   const ext = mimeTypeToExt(mimeType)
   const key = `${subDir}/${uuid()}${ext}`
   const buffer = Buffer.from(base64Data, 'base64')
-  return getStorage().save(key, buffer, mimeType)
+  const storage = await getStorage()
+  return storage.save(key, buffer, mimeType)
 }
 
 /**
@@ -134,7 +135,8 @@ export async function saveBase64Image(base64Data: string, mimeType: string, subD
  */
 export async function uploadLocalFile(localPath: string, key: string, contentType: string): Promise<string> {
   const buffer = fs.readFileSync(localPath)
-  return getStorage().save(key, buffer, contentType)
+  const storage = await getStorage()
+  return storage.save(key, buffer, contentType)
 }
 
 export function readImageAsDataUrl(relativePath: string): string {

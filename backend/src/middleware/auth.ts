@@ -9,11 +9,14 @@ import './context.js'
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
   const authHeader = (c.req.header('Authorization') || '').trim()
 
+  // Always extract X-API-Key (Studio passes it regardless of auth mode)
+  const apiKey = (c.req.header('X-API-Key') || '').trim()
+
   // Standalone mode: no auth header
   if (!authHeader) {
     const userId = c.req.header('X-User-ID')?.trim() || 'standalone'
     c.set('userId', userId)
-    c.set('apiKey', '')
+    c.set('apiKey', apiKey)
     return next()
   }
 
@@ -23,10 +26,10 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
 
   const secret = process.env.NEXTAUTH_SECRET || ''
   if (!secret) {
-    // Secret not configured — fall back to standalone
+    // Secret not configured — fall back to standalone but keep apiKey
     const userId = c.req.header('X-User-ID')?.trim() || 'standalone'
     c.set('userId', userId)
-    c.set('apiKey', '')
+    c.set('apiKey', apiKey)
     return next()
   }
 
@@ -45,7 +48,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     }
 
     c.set('userId', userId)
-    c.set('apiKey', (c.req.header('X-API-Key') || '').trim())
+    c.set('apiKey', apiKey)
     return next()
   } catch {
     return c.json({ error: 'invalid or expired token' }, 401)

@@ -46,6 +46,8 @@ app.post('/:type/chat', async (c) => {
   }
 
   const apiKey = c.get('apiKey') || ''
+  const userId = c.get('userId') || 'standalone'
+  console.log(`[Agent] userId=${userId} apiKey=${apiKey ? apiKey.slice(0, 8) + '...(' + apiKey.length + ')' : 'EMPTY'} headers.X-API-Key=${c.req.header('X-API-Key')?.slice(0, 8) || 'none'}`)
 
   let agent
   try {

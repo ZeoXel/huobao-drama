@@ -77,9 +77,11 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   }
 
   parseGenerateResponse(result: any): VideoGenResponse {
-    const taskId = result.id || result.task_id
+    // Gateway may wrap: { data: { task_id, ... } }
+    const inner = result.data || result
+    const taskId = inner.id || inner.task_id || result.id || result.task_id
     if (taskId) return { isAsync: true, taskId }
-    const videoUrl = result.video_url || result.content?.video_url || result.data?.video_url
+    const videoUrl = inner.video_url || inner.content?.video_url || result.video_url
     if (videoUrl) return { isAsync: false, videoUrl }
     throw new Error('No task_id or video_url in response')
   }
@@ -102,14 +104,20 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   }
 
   parsePollResponse(result: any): VideoPollResponse {
-    const status = result.status
-    if (status === 'succeeded' || status === 'completed') {
-      const videoUrl = result.video_url || result.content?.video_url || result.data?.video_url
-        || result.output?.video_url || result.results?.[0]?.url
+    // Gateway wraps response: { code, data: { status, data: { content: { video_url } } } }
+    // Direct Ark returns: { status, video_url } or { status, content: { video_url } }
+    const inner = result.data || result
+    const status = (inner.status || result.status || '').toLowerCase()
+
+    if (status === 'succeeded' || status === 'completed' || status === 'success') {
+      const videoUrl = inner.data?.content?.video_url  // gateway nested
+        || inner.content?.video_url                     // ark direct
+        || inner.video_url || result.video_url
+        || inner.output?.video_url || inner.results?.[0]?.url
       return { status: 'completed', videoUrl }
     }
     if (status === 'failed') {
-      return { status: 'failed', error: result.error || 'Video generation failed' }
+      return { status: 'failed', error: inner.fail_reason || result.error || 'Video generation failed' }
     }
     return { status: status || 'processing' }
   }

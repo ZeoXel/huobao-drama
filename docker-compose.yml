@@ -10,32 +10,17 @@ services:
         NPM_REGISTRY: ${NPM_REGISTRY:-}
         ALPINE_MIRROR: ${ALPINE_MIRROR:-}
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     volumes:
       - huobao-data:/app/data
-    environment:
-      - TZ=Asia/Shanghai
-      - PORT=5678
-      - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
-      - DB_PATH=/app/data/huobao_drama.db
-      - DATABASE_URL=${DATABASE_URL:-}
-      - STORAGE_PATH=/app/data/static
-      - CORS_ORIGINS=${CORS_ORIGINS:-}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
-      - GATEWAY_URL=${GATEWAY_URL:-}
-      - STORAGE_TYPE=${STORAGE_TYPE:-local}
-      - COS_SECRET_ID=${COS_SECRET_ID:-}
-      - COS_SECRET_KEY=${COS_SECRET_KEY:-}
-      - COS_BUCKET=${COS_BUCKET:-}
-      - COS_REGION=${COS_REGION:-}
-      - COS_PUBLIC_URL=${COS_PUBLIC_URL:-}
+    env_file: .env.production
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/api/v1/health"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
       start_period: 10s
     networks:

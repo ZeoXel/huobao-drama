@@ -3823,8 +3823,6 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .prod-cover { position: relative; aspect-ratio: 16/9; background: var(--bg-2); overflow: hidden; }
 .prod-cover img { width: 100%; height: 100%; object-fit: cover; }
 .prod-video { width: 100%; height: 100%; object-fit: cover; background: #000; display: block; }
-.prod-video:fullscreen,
-.prod-video:-webkit-full-screen { width: 100vw; height: 100vh; object-fit: contain; }
 .prod-cover-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
 .prod-idx {
   position: absolute; top: 5px; left: 5px; font-size: 10px; font-weight: 700;
@@ -4408,6 +4406,17 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 </style>
 
 <style>
+/* ===== Fullscreen video override (unscoped — :fullscreen 伪类不能在 scoped CSS 里可靠工作) =====
+   非全屏态走 scoped 的 .prod-video { object-fit: cover } 实现 16:9 缩略裁切；
+   全屏态覆盖成 object-fit: contain 让 9:16 等非标准比例视频完整显示 */
+.prod-video:fullscreen,
+.prod-video:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+
 /* ===== Dark Mode Overrides (unscoped for html.dark matching) ===== */
 html.dark .studio {
   background:

@@ -81,8 +81,21 @@ export const sceneAPI = {
   generateImage: (id: number, episodeId: number, prompt?: string) => api.post(`/scenes/${id}/generate-image`, { episode_id: episodeId, ...(prompt ? { prompt } : {}) }),
 }
 
+export interface ImageGenerateParams {
+  prompt: string
+  size?: string // WxH 格式，如 "1920x1080"
+  model?: string
+  reference_images?: string[]
+  frame_type?: string
+  storyboard_id?: number
+  scene_id?: number
+  character_id?: number
+  drama_id?: number
+  [key: string]: any
+}
+
 export const imageAPI = {
-  generate: (d: any) => api.post('/images', d),
+  generate: (d: ImageGenerateParams) => api.post('/images', d),
   list: (params?: { drama_id?: number; storyboard_id?: number }) => {
     const query = new URLSearchParams()
     if (params?.drama_id) query.set('drama_id', String(params.drama_id))
@@ -96,8 +109,22 @@ export const gridAPI = {
   status: (id: number) => api.get(`/grid/status/${id}`),
   split: (d: any) => api.post('/grid/split', d),
 }
+export interface VideoGenerateParams {
+  storyboard_id: number
+  drama_id?: number
+  prompt?: string
+  duration?: number
+  aspect_ratio?: string // 如 "16:9"、"9:16"
+  reference_mode?: 'single' | 'multiple' | 'first_last'
+  image_url?: string
+  first_frame_url?: string
+  last_frame_url?: string
+  reference_image_urls?: string[]
+  [key: string]: any
+}
+
 export const videoAPI = {
-  generate: (d: any) => api.post('/videos', d),
+  generate: (d: VideoGenerateParams) => api.post('/videos', d),
   get: (id: number) => api.get(`/videos/${id}`),
 }
 export const composeAPI = {

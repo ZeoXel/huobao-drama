@@ -18,37 +18,37 @@ export class GatewayVideoAdapter implements VideoProviderAdapter {
   provider = 'gateway'
 
   buildGenerateRequest(config: AIConfig, record: VideoGenerationRecord): ProviderRequest {
-    let promptText = record.prompt || ''
-
-    // 豆包/Seedance 系列通过 content 数组传参
-    const content: any[] = [{ type: 'text', text: promptText }]
+    // Gateway Seedance 格式（参考 studio/src/services/providers/seedance.ts gatewayBody）
+    // 端点: /v1/video/generations
+    // 顶层: { model, prompt, images, duration }
+    // metadata: { ratio, image_roles, ... }
+    const images: string[] = []
+    const imageRoles: string[] = []
 
     if (record.referenceMode === 'single' && record.imageUrl) {
-      content.push({ type: 'image_url', image_url: { url: record.imageUrl }, role: 'reference_image' })
+      images.push(record.imageUrl)
+      imageRoles.push('first_frame')
     } else if (record.referenceMode === 'first_last') {
-      if (record.firstFrameUrl) {
-        content.push({ type: 'image_url', image_url: { url: record.firstFrameUrl }, role: 'first_frame' })
-      }
-      if (record.lastFrameUrl) {
-        content.push({ type: 'image_url', image_url: { url: record.lastFrameUrl }, role: 'last_frame' })
-      }
+      if (record.firstFrameUrl) { images.push(record.firstFrameUrl); imageRoles.push('first_frame') }
+      if (record.lastFrameUrl)  { images.push(record.lastFrameUrl);  imageRoles.push('last_frame')  }
     } else if (record.referenceMode === 'multiple' && record.referenceImageUrls) {
       try {
-        const refs = JSON.parse(record.referenceImageUrls)
-        for (const url of refs) {
-          content.push({ type: 'image_url', image_url: { url }, role: 'reference_image' })
-        }
+        const refs: string[] = JSON.parse(record.referenceImageUrls)
+        for (const url of refs) { images.push(url); imageRoles.push('reference_image') }
       } catch {}
     }
 
+    const metadata: any = {}
+    if (imageRoles.length) metadata.image_roles = imageRoles
+    if (record.aspectRatio) metadata.ratio = record.aspectRatio
+
     const body: any = {
       model: record.model || config.model,
-      content,
+      prompt: record.prompt || '',
     }
-
-    // 可选参数
+    if (images.length) body.images = images
     if (record.duration) body.duration = record.duration
-    if (record.aspectRatio) body.size = record.aspectRatio
+    if (Object.keys(metadata).length) body.metadata = metadata
 
     return {
       url: joinProviderUrl(config.baseUrl, '/v1', '/video/generations'),

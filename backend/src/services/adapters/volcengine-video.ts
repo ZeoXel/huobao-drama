@@ -22,15 +22,17 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     const model = record.model || config.model || 'doubao-seedance-1-5-pro-251215'
 
     if (isGateway()) {
-      // Gateway: OpenAI-compatible format (/v1/video/generations)
+      // Gateway Seedance 格式（参考 studio/src/services/providers/seedance.ts gatewayBody）
+      // 端点: /v1/video/generations
+      // 顶层: { model, prompt, images, duration }
+      // metadata: { ratio, image_roles, watermark, generate_audio, ... }
       const body: any = {
         model,
         prompt: record.prompt || '',
         duration: this.normalizeDuration(record.duration),
-        aspect_ratio: record.aspectRatio || '16:9',
       }
 
-      // Reference images
+      // Reference images + 对应角色
       const images: string[] = []
       const metadata: any = { watermark: false, generate_audio: true }
 
@@ -45,6 +47,9 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
       } else if (record.referenceMode === 'multiple' && record.referenceImageUrls) {
         try { images.push(...JSON.parse(record.referenceImageUrls)) } catch {}
       }
+
+      // 画面比例走 metadata.ratio（和 studio 一致）。Seedance 支持 16:9/9:16/1:1/4:3/3:4/21:9/adaptive。
+      if (record.aspectRatio) metadata.ratio = record.aspectRatio
 
       if (images.length) body.images = images
       body.metadata = metadata

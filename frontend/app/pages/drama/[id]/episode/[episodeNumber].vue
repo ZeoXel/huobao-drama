@@ -899,6 +899,7 @@
               <span class="tag mono">{{ shotImgCount }}/{{ sbs.length }} 已有帧图</span>
               <span class="tag">{{ lockedImageConfigLabel }}</span>
               <div class="ml-auto flex gap-1">
+                <BaseSelect v-model="selectedAspectRatio" :options="aspectRatioOptions" placeholder="画面比例" searchable style="width:120px" />
                 <BaseSelect v-model="frameMode" :options="frameModeOptions" placeholder="帧模式" searchable style="width:100px" />
                 <button v-if="gridImagePath" class="btn btn-sm" @click="reopenGridPreview">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1222,6 +1223,7 @@
               <span class="dim" style="font-size:12px">{{ sbs.length }} 个镜头</span>
               <span class="tag mono">{{ shotVidCount }}/{{ sbs.length }} 已生成</span>
               <div class="ml-auto flex gap-1">
+                <BaseSelect v-model="selectedAspectRatio" :options="aspectRatioOptions" placeholder="画面比例" searchable style="width:120px" />
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1471,6 +1473,7 @@ import {
 import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI } from '~/composables/useApi'
 import { useAgent } from '~/composables/useAgent'
 import BaseSelect from '~/components/BaseSelect.vue'
+import { ASPECT_RATIOS, DEFAULT_ASPECT_RATIO, ratioToSize, isAspectRatio } from '~/utils/aspect-ratio'
 
 definePageMeta({ layout: 'studio' })
 
@@ -1507,6 +1510,18 @@ const prodTabIdx = computed({
   set: (v) => { prodTab.value = prodTabDefs.value[v]?.id || 'chars' },
 })
 const frameMode = ref('first')
+
+// 画面比例：全局运行时设置，图像/视频生成共享。localStorage 持久化。
+const ASPECT_RATIO_STORAGE_KEY = 'huobao:aspect-ratio'
+const selectedAspectRatio = ref(DEFAULT_ASPECT_RATIO)
+if (typeof window !== 'undefined') {
+  const saved = window.localStorage?.getItem(ASPECT_RATIO_STORAGE_KEY)
+  if (isAspectRatio(saved)) selectedAspectRatio.value = saved
+}
+watch(selectedAspectRatio, (v) => {
+  if (typeof window !== 'undefined') window.localStorage?.setItem(ASPECT_RATIO_STORAGE_KEY, v)
+})
+const aspectRatioOptions = ASPECT_RATIOS.map(item => ({ label: item.label, value: item.value }))
 const fallbackVoiceProfiles = [
   { id: 'alloy', label: 'Alloy', gender: '中性', traits: '平衡、自然、克制', suitable: '通用叙述、旁白、需要稳定输出的角色' },
   { id: 'echo', label: 'Echo', gender: '男声', traits: '低沉、稳重、冷静', suitable: '成熟男性、父辈、旁白、压迫感角色' },
@@ -2748,6 +2763,7 @@ async function genShotFrame(sb, frameType) {
       prompt,
       frame_type: frameType,
       reference_images: referenceImages.length ? referenceImages : undefined,
+      size: ratioToSize(selectedAspectRatio.value),
     }
     await imageAPI.generate(body)
     toast.success(frameType === 'first_frame' ? '首帧生成中' : '尾帧生成中')
@@ -2770,6 +2786,7 @@ async function genVid(sb) {
     drama_id: dramaId,
     prompt: sb.video_prompt || sb.videoPrompt || '',
     duration: Number(sb.duration || 5),
+    aspect_ratio: selectedAspectRatio.value,
   }
   const first = getFirstFrame(sb)
   const last = getLastFrame(sb)
@@ -3806,6 +3823,8 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .prod-cover { position: relative; aspect-ratio: 16/9; background: var(--bg-2); overflow: hidden; }
 .prod-cover img { width: 100%; height: 100%; object-fit: cover; }
 .prod-video { width: 100%; height: 100%; object-fit: cover; background: #000; display: block; }
+.prod-video:fullscreen,
+.prod-video:-webkit-full-screen { width: 100vw; height: 100vh; object-fit: contain; }
 .prod-cover-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
 .prod-idx {
   position: absolute; top: 5px; left: 5px; font-size: 10px; font-weight: 700;

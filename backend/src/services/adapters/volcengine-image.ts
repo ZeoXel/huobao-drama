@@ -24,9 +24,16 @@ export class VolcEngineImageAdapter implements ImageProviderAdapter {
     if (isGateway()) {
       // Gateway: OpenAI-compatible format (/v1/images/generations)
       // Seedream 5.0 requires minimum 3686400 pixels (~1920x1920)
+      // 按比例等比放大到满足最小像素要求，而不是强制改成正方形（会吃掉非 1:1 比例）
       let size = record.size || '2048x2048'
       const [w, h] = size.split('x').map(Number)
-      if (w && h && w * h < 3686400) size = '2048x2048'
+      if (w && h && w * h < 3686400) {
+        const scale = Math.sqrt(3686400 / (w * h))
+        // 向上取整到 64 的倍数，保证最终像素数仍 >= 最小要求且符合 API 对齐要求
+        const scaledW = Math.ceil((w * scale) / 64) * 64
+        const scaledH = Math.ceil((h * scale) / 64) * 64
+        size = `${scaledW}x${scaledH}`
+      }
       const body: any = { model, prompt: record.prompt, size }
       if (record.referenceImages) {
         try {

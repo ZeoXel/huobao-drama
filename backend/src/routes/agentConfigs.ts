@@ -3,13 +3,19 @@ import { eq, isNull, and } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, badRequest, now } from '../utils/response.js'
 import { toSnakeCaseArray, toSnakeCase } from '../utils/transform.js'
+import '../middleware/context.js'
 
 const app = new Hono()
+const DEFAULT_USER = 'standalone'
+const uid = (c: any) => (c.get('userId') || '').trim() || DEFAULT_USER
 
 // GET /agent-configs
 app.get('/', async (c) => {
   const rows = await db.select().from(schema.agentConfigs)
-    .where(isNull(schema.agentConfigs.deletedAt))
+    .where(and(
+      eq(schema.agentConfigs.userId, uid(c)),
+      isNull(schema.agentConfigs.deletedAt),
+    ))
   return success(c, toSnakeCaseArray(rows))
 })
 
@@ -17,23 +23,26 @@ app.get('/', async (c) => {
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const [row] = await db.select().from(schema.agentConfigs)
-    .where(eq(schema.agentConfigs.id, id))
+    .where(and(eq(schema.agentConfigs.id, id), eq(schema.agentConfigs.userId, uid(c))))
   if (!row) return badRequest(c, 'Not found')
   return success(c, toSnakeCase(row))
 })
 
-// POST /agent-configs (upsert by agent_type)
+// POST /agent-configs (upsert by agent_type, 按用户隔离)
 app.post('/', async (c) => {
   const body = await c.req.json()
   if (!body.agent_type) return badRequest(c, 'agent_type required')
   const ts = now()
+  const userId = uid(c)
 
-  // Check if exists (including soft-deleted)
+  // 同用户 + agent_type 唯一（含已软删除）
   const [existing] = await db.select().from(schema.agentConfigs)
-    .where(eq(schema.agentConfigs.agentType, body.agent_type))
+    .where(and(
+      eq(schema.agentConfigs.agentType, body.agent_type),
+      eq(schema.agentConfigs.userId, userId),
+    ))
 
   if (existing) {
-    // Update existing
     await db.update(schema.agentConfigs).set({
       name: body.name || existing.name,
       model: body.model ?? existing.model,
@@ -50,6 +59,7 @@ app.post('/', async (c) => {
   }
 
   const [result] = await db.insert(schema.agentConfigs).values({
+    userId,
     agentType: body.agent_type,
     name: body.name || '',
     description: body.description || '',
@@ -80,15 +90,18 @@ app.put('/:id', async (c) => {
   if ('name' in body) updates.name = body.name
   if ('description' in body) updates.description = body.description
 
-  await db.update(schema.agentConfigs).set(updates).where(eq(schema.agentConfigs.id, id))
-  const [row] = await db.select().from(schema.agentConfigs).where(eq(schema.agentConfigs.id, id))
-  return success(c, toSnakeCase(row))
+  await db.update(schema.agentConfigs).set(updates)
+    .where(and(eq(schema.agentConfigs.id, id), eq(schema.agentConfigs.userId, uid(c))))
+  const [row] = await db.select().from(schema.agentConfigs)
+    .where(and(eq(schema.agentConfigs.id, id), eq(schema.agentConfigs.userId, uid(c))))
+  return success(c, row ? toSnakeCase(row) : null)
 })
 
 // DELETE /agent-configs/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  await db.update(schema.agentConfigs).set({ deletedAt: now() }).where(eq(schema.agentConfigs.id, id))
+  await db.update(schema.agentConfigs).set({ deletedAt: now() })
+    .where(and(eq(schema.agentConfigs.id, id), eq(schema.agentConfigs.userId, uid(c))))
   return success(c)
 })
 

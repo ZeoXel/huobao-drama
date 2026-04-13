@@ -41,6 +41,8 @@ if (DATABASE_TYPE === 'postgres') {
     `ALTER TABLE video_generations ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
     `ALTER TABLE video_merges ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
     `ALTER TABLE assets ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE ai_service_configs ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
+    `ALTER TABLE agent_configs ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'standalone'`,
     // Character voice fields
     `ALTER TABLE characters ADD COLUMN IF NOT EXISTS voice_sample_url TEXT`,
     `ALTER TABLE characters ADD COLUMN IF NOT EXISTS voice_provider TEXT`,
@@ -94,6 +96,8 @@ if (DATABASE_TYPE === 'postgres') {
     'CREATE INDEX IF NOT EXISTS idx_video_generations_user_id ON video_generations(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_video_merges_user_id ON video_merges(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_assets_user_id ON assets(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_ai_service_configs_user_id ON ai_service_configs(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_agent_configs_user_id ON agent_configs(user_id)',
   ]
   for (const sql of indexes) {
     try { await client.unsafe(sql) } catch {}
@@ -458,7 +462,7 @@ if (DATABASE_TYPE === 'postgres') {
   ensureColumn('episodes', 'audio_config_id', 'INTEGER')
 
   // --- User isolation columns ---
-  const userIdTables = ['dramas', 'episodes', 'image_generations', 'video_generations', 'video_merges', 'assets']
+  const userIdTables = ['dramas', 'episodes', 'image_generations', 'video_generations', 'video_merges', 'assets', 'ai_service_configs', 'agent_configs']
   for (const table of userIdTables) {
     ensureColumn(table, 'user_id', "TEXT NOT NULL DEFAULT 'standalone'")
   }

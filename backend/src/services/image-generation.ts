@@ -25,8 +25,8 @@ interface GenerateImageParams {
 export async function generateImage(params: GenerateImageParams): Promise<number> {
   const ts = now()
   const config = params.configId
-    ? await getConfigById(params.configId, params.apiKey)
-    : await getActiveConfig('image', params.apiKey)
+    ? await getConfigById(params.configId, params.apiKey, params.userId)
+    : await getActiveConfig('image', params.apiKey, params.userId)
   if (!config) throw new Error('No active image AI config')
 
   const [inserted] = await db.insert(schema.imageGenerations).values({

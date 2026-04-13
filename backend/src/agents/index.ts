@@ -168,15 +168,20 @@ const DEFAULT_PROMPTS: Record<string, { name: string; instructions: string }> = 
 
 export const validAgentTypes = Object.keys(DEFAULT_PROMPTS)
 
-async function getAgentConfig(agentType: string) {
+async function getAgentConfig(agentType: string, userId?: string) {
+  const uid = (userId || '').trim() || 'standalone'
   const rows = await db.select().from(schema.agentConfigs)
-    .where(and(eq(schema.agentConfigs.agentType, agentType), isNull(schema.agentConfigs.deletedAt)))
+    .where(and(
+      eq(schema.agentConfigs.agentType, agentType),
+      eq(schema.agentConfigs.userId, uid),
+      isNull(schema.agentConfigs.deletedAt),
+    ))
   // Return active one, or first one
   return rows.find(r => r.isActive) || rows[0] || null
 }
 
-async function getModel(dbConfig: any, apiKey?: string) {
-  const textConfig = await getTextConfig(apiKey)
+async function getModel(dbConfig: any, apiKey?: string, userId?: string) {
+  const textConfig = await getTextConfig(apiKey, userId)
   const resolvedBaseURL = getTextProviderBaseUrl(textConfig)
   logTaskProgress('AIConfig', 'text-model-endpoint', {
     provider: textConfig.provider,
@@ -191,14 +196,14 @@ async function getModel(dbConfig: any, apiKey?: string) {
   return provider.chat(modelName)
 }
 
-export async function createAgent(type: string, episodeId: number, dramaId: number, apiKey?: string): Promise<Agent | null> {
+export async function createAgent(type: string, episodeId: number, dramaId: number, apiKey?: string, userId?: string): Promise<Agent | null> {
   const defaults = DEFAULT_PROMPTS[type]
   if (!defaults) return null
 
-  const dbConfig = await getAgentConfig(type)
-  const model = await getModel(dbConfig, apiKey)
+  const dbConfig = await getAgentConfig(type, userId)
+  const model = await getModel(dbConfig, apiKey, userId)
   const baseInstructions = dbConfig?.systemPrompt?.trim() || defaults.instructions
-  const skillInstructions = loadAgentSkills(type)
+  const skillInstructions = loadAgentSkills(type, userId)
   const instructions = skillInstructions
     ? [baseInstructions, '', skillInstructions].join('\n')
     : baseInstructions

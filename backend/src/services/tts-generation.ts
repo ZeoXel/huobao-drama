@@ -16,13 +16,14 @@ interface TTSParams {
   emotion?: string
   configId?: number | null
   apiKey?: string
+  userId?: string
 }
 
 /**
  * 生成 TTS 音频，返回本地文件路径
  */
 export async function generateTTS(params: TTSParams): Promise<string> {
-  const config = await getAudioConfigById(params.configId, params.apiKey)
+  const config = await getAudioConfigById(params.configId, params.apiKey, params.userId)
   const adapter = getTTSAdapter(config.provider)
 
   logTaskStart('AudioTask', 'tts-generate', {
@@ -92,7 +93,7 @@ export async function generateTTS(params: TTSParams): Promise<string> {
 /**
  * 为角色生成试听音频
  */
-export async function generateVoiceSample(characterName: string, voiceId: string, configId?: number | null, apiKey?: string): Promise<string> {
+export async function generateVoiceSample(characterName: string, voiceId: string, configId?: number | null, apiKey?: string, userId?: string): Promise<string> {
   const sampleText = `你好，我是${characterName}。很高兴认识你，这是我的声音试听。`
-  return generateTTS({ text: sampleText, voice: voiceId, configId, apiKey })
+  return generateTTS({ text: sampleText, voice: voiceId, configId, apiKey, userId })
 }

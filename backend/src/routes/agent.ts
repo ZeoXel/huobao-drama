@@ -51,7 +51,7 @@ app.post('/:type/chat', async (c) => {
 
   let agent
   try {
-    agent = await createAgent(agentType, episode_id, drama_id, apiKey)
+    agent = await createAgent(agentType, episode_id, drama_id, apiKey, userId)
   } catch (err: any) {
     logTaskError('Agent', agentType, { reason: 'createAgent failed', error: err.message })
     console.error('[Agent] createAgent error:', err.stack || err)

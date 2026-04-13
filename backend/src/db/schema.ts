@@ -140,6 +140,7 @@ export const storyboardCharacters = sqliteTable('storyboard_characters', {
 
 export const aiServiceConfigs = sqliteTable('ai_service_configs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   serviceType: text('service_type').notNull(),
   provider: text('provider'),
   name: text('name').notNull(),
@@ -183,6 +184,7 @@ export const aiVoices = sqliteTable('ai_voices', {
 
 export const agentConfigs = sqliteTable('agent_configs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: text('user_id').notNull().default('standalone'),
   agentType: text('agent_type').notNull(),
   name: text('name').notNull(),
   description: text('description'),

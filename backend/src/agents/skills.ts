@@ -4,7 +4,8 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const SKILLS_DIR = path.resolve(__dirname, '../../skills')
+export const SKILLS_ROOT = path.resolve(__dirname, '../../skills')
+const DEFAULT_USER_ID = 'standalone'
 const AGENT_SKILL_MAP: Record<string, string[]> = {
   script_rewriter: ['script_rewriter'],
   extractor: ['extractor'],
@@ -20,24 +21,35 @@ function stripFrontmatter(content: string): string {
   return content.slice(end + 4).trim()
 }
 
-function readSkill(skillId: string): string {
-  const skillPath = path.join(SKILLS_DIR, skillId, 'SKILL.md')
-  if (!fs.existsSync(skillPath)) return ''
+export function getUserSkillsDir(userId?: string): string {
+  const uid = (userId || '').trim() || DEFAULT_USER_ID
+  return path.join(SKILLS_ROOT, 'users', uid)
+}
 
-  const raw = fs.readFileSync(skillPath, 'utf-8')
+function safeReadSkillFile(dir: string, skillId: string): string {
+  const skillPath = path.join(dir, skillId, 'SKILL.md')
+  if (!fs.existsSync(skillPath)) return ''
+  return fs.readFileSync(skillPath, 'utf-8')
+}
+
+/**
+ * 用户专属 skill 优先；不存在则回退到仓库内置 skill（skills/<skillId>/SKILL.md）
+ */
+function readSkill(skillId: string, userId?: string): string {
+  const raw = safeReadSkillFile(getUserSkillsDir(userId), skillId)
+    || safeReadSkillFile(SKILLS_ROOT, skillId)
   const content = stripFrontmatter(raw)
   if (!content) return ''
-
   return [
     `## Skill: ${skillId}`,
     content,
   ].join('\n')
 }
 
-export function loadAgentSkills(agentType: string): string {
+export function loadAgentSkills(agentType: string, userId?: string): string {
   const skillIds = AGENT_SKILL_MAP[agentType] || []
   const contents = skillIds
-    .map(readSkill)
+    .map((skillId) => readSkill(skillId, userId))
     .filter(Boolean)
 
   if (!contents.length) return ''

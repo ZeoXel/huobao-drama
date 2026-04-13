@@ -355,8 +355,9 @@ async function tryAgentGridPrompt(
   mode: string,
   referenceLegend: string,
   apiKey?: string,
+  userId?: string,
 ) {
-  const agent = await createAgent('grid_prompt_generator', episodeId, dramaId, apiKey)
+  const agent = await createAgent('grid_prompt_generator', episodeId, dramaId, apiKey, userId)
   if (!agent) return null
 
   const result = await agent.generate(
@@ -390,6 +391,7 @@ async function tryAgentGridPrompt(
 app.post('/prompt', async (c) => {
   const body = await c.req.json()
   const apiKey = c.get('apiKey') || ''
+  const userId = c.get('userId') || 'standalone'
   const {
     storyboard_ids,
     drama_id,
@@ -435,6 +437,7 @@ app.post('/prompt', async (c) => {
       mode,
       referenceLegend,
       apiKey,
+      userId,
     )
 
     if (agentPayload?.grid_prompt) {

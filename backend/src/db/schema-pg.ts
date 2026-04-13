@@ -140,6 +140,7 @@ export const storyboardCharacters = pgTable('storyboard_characters', {
 
 export const aiServiceConfigs = pgTable('ai_service_configs', {
   id: integer('id').primaryKey(),
+  userId: text('user_id').notNull().default('standalone'),
   serviceType: text('service_type').notNull(),
   provider: text('provider'),
   name: text('name').notNull(),
@@ -182,6 +183,7 @@ export const aiVoices = pgTable('ai_voices', {
 
 export const agentConfigs = pgTable('agent_configs', {
   id: integer('id').primaryKey(),
+  userId: text('user_id').notNull().default('standalone'),
   agentType: text('agent_type').notNull(),
   name: text('name').notNull(),
   description: text('description'),

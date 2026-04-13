@@ -27,8 +27,8 @@ interface GenerateVideoParams {
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
   const config = params.configId
-    ? await getConfigById(params.configId, params.apiKey)
-    : await getActiveConfig('video', params.apiKey)
+    ? await getConfigById(params.configId, params.apiKey, params.userId)
+    : await getActiveConfig('video', params.apiKey, params.userId)
   if (!config) throw new Error('No active video AI config')
 
   const [inserted] = await db.insert(schema.videoGenerations).values({

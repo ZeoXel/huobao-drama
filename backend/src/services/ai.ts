@@ -2,9 +2,14 @@
  * AI 服务抽象层 — 从数据库配置中获取 provider 和 API key
  */
 import { db, schema } from '../db/index.js'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { logTaskProgress, logTaskWarn } from '../utils/task-logger.js'
 import { joinProviderUrl } from './adapters/url.js'
+
+const DEFAULT_USER_ID = 'standalone'
+function resolveUserId(userId?: string): string {
+  return (userId || '').trim() || DEFAULT_USER_ID
+}
 
 export type ServiceType = 'text' | 'image' | 'video' | 'audio'
 
@@ -68,16 +73,20 @@ function applyOverrides(config: AIConfig, apiKey?: string): AIConfig {
   }
 }
 
-export async function getActiveConfig(serviceType: ServiceType, apiKey?: string): Promise<AIConfig | null> {
+export async function getActiveConfig(serviceType: ServiceType, apiKey?: string, userId?: string): Promise<AIConfig | null> {
+  const uid = resolveUserId(userId)
   const allRows = await db.select().from(schema.aiServiceConfigs)
-    .where(eq(schema.aiServiceConfigs.serviceType, serviceType))
+    .where(and(
+      eq(schema.aiServiceConfigs.serviceType, serviceType),
+      eq(schema.aiServiceConfigs.userId, uid),
+    ))
   const rows = allRows
     .filter(r => r.isActive)
     .sort((a, b) => (b.priority || 0) - (a.priority || 0)) // 高优先级优先
 
   const active = rows[0]
   if (!active) {
-    logTaskWarn('AIConfig', 'active-config-missing', { serviceType })
+    logTaskWarn('AIConfig', 'active-config-missing', { serviceType, userId: uid })
     return null
   }
 
@@ -88,6 +97,7 @@ export async function getActiveConfig(serviceType: ServiceType, apiKey?: string)
     provider: active.provider,
     model: models[0] || '',
     priority: active.priority,
+    userId: uid,
   })
   const config: AIConfig = {
     provider: active.provider || '',
@@ -98,31 +108,35 @@ export async function getActiveConfig(serviceType: ServiceType, apiKey?: string)
   return applyOverrides(config, apiKey)
 }
 
-export async function getTextConfig(apiKey?: string): Promise<AIConfig> {
-  const config = await getActiveConfig('text', apiKey)
+export async function getTextConfig(apiKey?: string, userId?: string): Promise<AIConfig> {
+  const config = await getActiveConfig('text', apiKey, userId)
   if (!config) throw new Error('No active text AI config')
   return config
 }
 
-export async function getAudioConfig(apiKey?: string): Promise<AIConfig> {
-  const config = await getActiveConfig('audio', apiKey)
+export async function getAudioConfig(apiKey?: string, userId?: string): Promise<AIConfig> {
+  const config = await getActiveConfig('audio', apiKey, userId)
   if (!config) throw new Error('No active audio AI config — 请在设置中添加音频服务')
   return config
 }
 
-export async function getAudioConfigById(id?: number | null, apiKey?: string): Promise<AIConfig> {
+export async function getAudioConfigById(id?: number | null, apiKey?: string, userId?: string): Promise<AIConfig> {
   if (id) {
-    const config = await getConfigById(id, apiKey)
+    const config = await getConfigById(id, apiKey, userId)
     if (config) return config
   }
-  return getAudioConfig(apiKey)
+  return getAudioConfig(apiKey, userId)
 }
 
-export async function getConfigById(id: number, apiKey?: string): Promise<AIConfig | null> {
+export async function getConfigById(id: number, apiKey?: string, userId?: string): Promise<AIConfig | null> {
+  const uid = resolveUserId(userId)
   const [row] = await db.select().from(schema.aiServiceConfigs)
-    .where(eq(schema.aiServiceConfigs.id, id))
+    .where(and(
+      eq(schema.aiServiceConfigs.id, id),
+      eq(schema.aiServiceConfigs.userId, uid),
+    ))
   if (!row || !row.isActive) {
-    logTaskWarn('AIConfig', 'config-by-id-missing', { configId: id })
+    logTaskWarn('AIConfig', 'config-by-id-missing', { configId: id, userId: uid })
     return null
   }
   const models = row.model ? JSON.parse(row.model) : []
@@ -131,6 +145,7 @@ export async function getConfigById(id: number, apiKey?: string): Promise<AIConf
     provider: row.provider,
     model: models[0] || '',
     serviceType: row.serviceType,
+    userId: uid,
   })
   const config: AIConfig = {
     provider: row.provider || '',

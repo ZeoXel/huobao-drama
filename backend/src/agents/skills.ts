@@ -4,7 +4,11 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-export const SKILLS_ROOT = path.resolve(__dirname, '../../skills')
+// Skills 目录位于仓库/镜像根：dev = repo/skills；Docker = /app/skills
+// backend/src/agents → ../../../skills
+export const SKILLS_ROOT = process.env.SKILLS_ROOT
+  ? path.resolve(process.env.SKILLS_ROOT)
+  : path.resolve(__dirname, '../../../skills')
 const DEFAULT_USER_ID = 'standalone'
 const AGENT_SKILL_MAP: Record<string, string[]> = {
   script_rewriter: ['script_rewriter'],

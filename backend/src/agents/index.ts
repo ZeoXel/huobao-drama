@@ -170,14 +170,19 @@ export const validAgentTypes = Object.keys(DEFAULT_PROMPTS)
 
 async function getAgentConfig(agentType: string, userId?: string) {
   const uid = (userId || '').trim() || 'standalone'
-  const rows = await db.select().from(schema.agentConfigs)
+  const query = (u: string) => db.select().from(schema.agentConfigs)
     .where(and(
       eq(schema.agentConfigs.agentType, agentType),
-      eq(schema.agentConfigs.userId, uid),
+      eq(schema.agentConfigs.userId, u),
       isNull(schema.agentConfigs.deletedAt),
     ))
-  // Return active one, or first one
-  return rows.find(r => r.isActive) || rows[0] || null
+  let rows = await query(uid)
+  let picked = rows.find((r: any) => r.isActive) || rows[0] || null
+  if (!picked && uid !== 'standalone') {
+    rows = await query('standalone')
+    picked = rows.find((r: any) => r.isActive) || rows[0] || null
+  }
+  return picked
 }
 
 async function getModel(dbConfig: any, apiKey?: string, userId?: string) {

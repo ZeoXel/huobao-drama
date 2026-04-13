@@ -340,6 +340,13 @@ async function saveModelConfigs() {
       )
 
       if (existing) {
+        // 未改动的 standalone 默认行跳过，避免无谓地生成用户副本
+        const currentModel = Array.isArray(existing.model) ? existing.model[0] : existing.model
+        const unchanged = existing.is_default
+          && currentModel === modelValue
+          && (existing.priority ?? 0) === priorityMap[st.type]
+          && existing.is_active !== false
+        if (unchanged) continue
         // Update existing config
         await aiConfigAPI.update(existing.id, {
           model: [modelValue],
@@ -516,7 +523,15 @@ async function saveAgentCfg(type) {
       max_tokens: agentForm.max_tokens,
       system_prompt: agentForm.system_prompt,
     }
-    if (existing) {
+    // 未改动的 standalone 默认行跳过，避免生成无差异的用户副本
+    const unchanged = existing?.is_default
+      && existing.model === data.model
+      && (existing.temperature ?? 0.7) === data.temperature
+      && (existing.max_tokens ?? 4096) === data.max_tokens
+      && (existing.system_prompt || '') === (data.system_prompt || '')
+    if (unchanged) {
+      // no-op
+    } else if (existing) {
       await agentConfigAPI.update(existing.id, data)
     } else {
       await agentConfigAPI.create(data)

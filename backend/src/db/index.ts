@@ -98,6 +98,9 @@ if (DATABASE_TYPE === 'postgres') {
     'CREATE INDEX IF NOT EXISTS idx_assets_user_id ON assets(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_ai_service_configs_user_id ON ai_service_configs(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_agent_configs_user_id ON agent_configs(user_id)',
+    // 唯一索引：保障 copy-on-write 并发安全
+    'CREATE UNIQUE INDEX IF NOT EXISTS uniq_ai_service_configs_user_type_provider ON ai_service_configs(user_id, service_type, provider)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_configs_user_type ON agent_configs(user_id, agent_type) WHERE deleted_at IS NULL',
   ]
   for (const sql of indexes) {
     try { await client.unsafe(sql) } catch {}
@@ -470,6 +473,11 @@ if (DATABASE_TYPE === 'postgres') {
   for (const table of userIdTables) {
     sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_user_id ON ${table}(user_id)`)
   }
+  // 唯一索引：保障 copy-on-write 并发安全，防止同 user 重复 (service_type, provider) / (agent_type)
+  sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_ai_service_configs_user_type_provider
+    ON ai_service_configs(user_id, service_type, provider)`)
+  sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_configs_user_type
+    ON agent_configs(user_id, agent_type) WHERE deleted_at IS NULL`)
 
   db = drizzleSqlite(sqlite, { schema: sqliteSchema })
   schema = sqliteSchema

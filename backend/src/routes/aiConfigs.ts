@@ -7,26 +7,15 @@ import { joinProviderUrl } from '../services/adapters/url.js'
 import { redactUrl, logTaskError, logTaskProgress, logTaskSuccess } from '../utils/task-logger.js'
 import '../middleware/context.js'
 
+import {
+  DEFAULT_USER_ID as DEFAULT_USER,
+  HUOBAO_PRESET_SERVICES,
+  HUOBAO_AGENT_DEFAULTS,
+  HUOBAO_AGENT_MODEL,
+} from '../db/defaults.js'
+
 const app = new Hono()
-const DEFAULT_USER = 'standalone'
 const uid = (c: any) => (c.get('userId') || '').trim() || DEFAULT_USER
-
-const HUOBAO_PRESET_SERVICES = [
-  { serviceType: 'text', label: '文本', provider: 'chatfire', baseUrl: 'https://api.chatfire.site', model: 'gemini-3-pro-preview', priority: 100 },
-  { serviceType: 'image', label: '图片', provider: 'gemini', baseUrl: 'https://api.chatfire.site', model: 'gemini-3-pro-image-preview', priority: 99 },
-  { serviceType: 'video', label: '视频', provider: 'volcengine', baseUrl: 'https://api.chatfire.site/volcengine', model: 'doubao-seedance-1-5-pro-251215', priority: 98 },
-  { serviceType: 'audio', label: '音频', provider: 'minimax', baseUrl: 'https://api.chatfire.site/minimax', model: 'speech-2.8-hd', priority: 97 },
-] as const
-
-const HUOBAO_AGENT_DEFAULTS = [
-  { agentType: 'script_rewriter', name: '剧本改写' },
-  { agentType: 'extractor', name: '角色场景提取' },
-  { agentType: 'storyboard_breaker', name: '分镜拆解' },
-  { agentType: 'voice_assigner', name: '音色分配' },
-  { agentType: 'grid_prompt_generator', name: '图片提示词生成' },
-] as const
-
-const HUOBAO_AGENT_MODEL = 'gemini-3-pro-preview'
 
 function bearerHeaders(apiKey?: string, withJson = false) {
   const headers: Record<string, string> = {}
@@ -126,15 +115,34 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
 }
 
 // GET /ai-configs?service_type=text
+// 合并策略：用户行覆盖 standalone 默认行（按 service_type+provider 去重）
 app.get('/', async (c) => {
   const serviceType = c.req.query('service_type')
-  let rows = await db.select().from(schema.aiServiceConfigs)
-    .where(eq(schema.aiServiceConfigs.userId, uid(c)))
-  if (serviceType) rows = rows.filter(r => r.serviceType === serviceType)
+  const userId = uid(c)
 
-  const parsed = rows.map(r => ({
-    ...toSnakeCase(r),
-    model: r.model ? JSON.parse(r.model) : [],
+  const userRows = await db.select().from(schema.aiServiceConfigs)
+    .where(eq(schema.aiServiceConfigs.userId, userId))
+
+  let defaultRows: any[] = []
+  if (userId !== DEFAULT_USER) {
+    defaultRows = await db.select().from(schema.aiServiceConfigs)
+      .where(eq(schema.aiServiceConfigs.userId, DEFAULT_USER))
+  }
+
+  const key = (r: any) => `${r.serviceType}::${r.provider || ''}`
+  const merged = new Map<string, any>()
+  for (const r of defaultRows) merged.set(key(r), { row: r, isDefault: true })
+  for (const r of userRows) merged.set(key(r), { row: r, isDefault: false })
+
+  let items = Array.from(merged.values())
+  if (serviceType) items = items.filter(it => it.row.serviceType === serviceType)
+
+  const parsed = items.map(({ row, isDefault }) => ({
+    ...toSnakeCase(row),
+    // 默认行对非 standalone 用户屏蔽 api_key，避免密钥泄露
+    api_key: isDefault ? '' : row.apiKey,
+    model: row.model ? JSON.parse(row.model) : [],
+    is_default: isDefault,
   }))
   return success(c, parsed)
 })
@@ -326,42 +334,95 @@ app.post('/test', async (c) => {
   }
 })
 
-// GET /ai-configs/:id
+// GET /ai-configs/:id — 先查用户行；不存在回落 standalone
 app.get('/:id', async (c) => {
   const id = Number(c.req.param('id'))
-  const [row] = await db.select().from(schema.aiServiceConfigs)
-    .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, uid(c))))
+  const userId = uid(c)
+  let [row] = await db.select().from(schema.aiServiceConfigs)
+    .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, userId)))
+  let isDefault = false
+  if (!row && userId !== DEFAULT_USER) {
+    ;[row] = await db.select().from(schema.aiServiceConfigs)
+      .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, DEFAULT_USER)))
+    isDefault = !!row
+  }
   if (!row) return notFound(c)
   return success(c, {
     ...toSnakeCase(row),
+    api_key: isDefault ? '' : row.apiKey,
     model: row.model ? JSON.parse(row.model) : [],
+    is_default: isDefault,
   })
 })
 
-// PUT /ai-configs/:id
+// PUT /ai-configs/:id — 若 id 指向 standalone 行且调用者非 standalone，写时复制
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json()
-  const updates: Record<string, any> = { updatedAt: now() }
+  const userId = uid(c)
+  const ts = now()
 
-  if ('provider' in body) updates.provider = body.provider
-  if ('name' in body) updates.name = body.name
-  if ('base_url' in body) updates.baseUrl = body.base_url
-  if ('api_key' in body) updates.apiKey = body.api_key
-  if ('model' in body) updates.model = JSON.stringify(body.model)
-  if ('priority' in body) updates.priority = body.priority
-  if ('is_active' in body) updates.isActive = body.is_active
+  const applyBody = (base: any) => ({
+    provider: 'provider' in body ? body.provider : base.provider,
+    name: 'name' in body ? body.name : base.name,
+    baseUrl: 'base_url' in body ? body.base_url : base.baseUrl,
+    apiKey: 'api_key' in body ? body.api_key : base.apiKey,
+    model: 'model' in body ? JSON.stringify(body.model) : base.model,
+    priority: 'priority' in body ? body.priority : base.priority,
+    isActive: 'is_active' in body ? body.is_active : base.isActive,
+  })
 
-  await db.update(schema.aiServiceConfigs).set(updates)
-    .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, uid(c))))
-  return success(c)
+  // 用户自己行
+  const [own] = await db.select().from(schema.aiServiceConfigs)
+    .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, userId)))
+  if (own) {
+    await db.update(schema.aiServiceConfigs)
+      .set({ ...applyBody(own), updatedAt: ts })
+      .where(eq(schema.aiServiceConfigs.id, id))
+    return success(c)
+  }
+
+  // 回落：检查是否 standalone 默认行 → 写时复制
+  if (userId !== DEFAULT_USER) {
+    const [def] = await db.select().from(schema.aiServiceConfigs)
+      .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, DEFAULT_USER)))
+    if (def) {
+      // 若同 userId+service_type+provider 已存在覆盖行则更新，否则插入
+      const [existing] = await db.select().from(schema.aiServiceConfigs).where(and(
+        eq(schema.aiServiceConfigs.userId, userId),
+        eq(schema.aiServiceConfigs.serviceType, def.serviceType),
+        eq(schema.aiServiceConfigs.provider, def.provider as any),
+      ))
+      const payload = applyBody(def)
+      if (existing) {
+        await db.update(schema.aiServiceConfigs).set({ ...payload, updatedAt: ts })
+          .where(eq(schema.aiServiceConfigs.id, existing.id))
+        return success(c, { copied_from_default: def.id, user_row_id: existing.id })
+      }
+      const [created] = await db.insert(schema.aiServiceConfigs).values({
+        userId,
+        serviceType: def.serviceType,
+        ...payload,
+        createdAt: ts,
+        updatedAt: ts,
+      }).returning()
+      return success(c, { copied_from_default: def.id, user_row_id: created.id })
+    }
+  }
+  return notFound(c)
 })
 
-// DELETE /ai-configs/:id
+// DELETE /ai-configs/:id — 仅能删自己的行；standalone 默认行不可删
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  const userId = uid(c)
+  if (userId !== DEFAULT_USER) {
+    const [def] = await db.select().from(schema.aiServiceConfigs)
+      .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, DEFAULT_USER)))
+    if (def) return badRequest(c, '默认配置不可删除，请创建用户覆盖后再调整')
+  }
   await db.delete(schema.aiServiceConfigs)
-    .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, uid(c))))
+    .where(and(eq(schema.aiServiceConfigs.id, id), eq(schema.aiServiceConfigs.userId, userId)))
   return success(c)
 })
 

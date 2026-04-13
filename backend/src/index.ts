@@ -24,6 +24,9 @@ import webhooks from './routes/webhooks.js'
 import aiVoices from './routes/aiVoices.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { authMiddleware } from './middleware/auth.js'
+import { seedStandaloneDefaults } from './db/defaults.js'
+
+await seedStandaloneDefaults().catch(err => console.error('seedStandaloneDefaults failed:', err))
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '../..')

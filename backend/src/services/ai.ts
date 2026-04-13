@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm'
 import { logTaskProgress, logTaskWarn } from '../utils/task-logger.js'
 import { joinProviderUrl } from './adapters/url.js'
 
-const DEFAULT_USER_ID = 'standalone'
+import { DEFAULT_USER_ID } from '../db/defaults.js'
 function resolveUserId(userId?: string): string {
   return (userId || '').trim() || DEFAULT_USER_ID
 }
@@ -73,21 +73,31 @@ function applyOverrides(config: AIConfig, apiKey?: string): AIConfig {
   }
 }
 
-export async function getActiveConfig(serviceType: ServiceType, apiKey?: string, userId?: string): Promise<AIConfig | null> {
-  const uid = resolveUserId(userId)
+async function pickActiveRow(serviceType: ServiceType, uid: string) {
   const allRows = await db.select().from(schema.aiServiceConfigs)
     .where(and(
       eq(schema.aiServiceConfigs.serviceType, serviceType),
       eq(schema.aiServiceConfigs.userId, uid),
     ))
-  const rows = allRows
-    .filter(r => r.isActive)
-    .sort((a, b) => (b.priority || 0) - (a.priority || 0)) // 高优先级优先
+  return allRows
+    .filter((r: any) => r.isActive)
+    .sort((a: any, b: any) => (b.priority || 0) - (a.priority || 0))[0] || null
+}
 
-  const active = rows[0]
+export async function getActiveConfig(serviceType: ServiceType, apiKey?: string, userId?: string): Promise<AIConfig | null> {
+  const uid = resolveUserId(userId)
+  let active = await pickActiveRow(serviceType, uid)
+  let fromDefault = false
+  if (!active && uid !== DEFAULT_USER_ID) {
+    active = await pickActiveRow(serviceType, DEFAULT_USER_ID)
+    fromDefault = !!active
+  }
   if (!active) {
     logTaskWarn('AIConfig', 'active-config-missing', { serviceType, userId: uid })
     return null
+  }
+  if (fromDefault) {
+    logTaskProgress('AIConfig', 'active-config-fallback-default', { serviceType, userId: uid })
   }
 
   const models = active.model ? JSON.parse(active.model) : []
@@ -130,11 +140,18 @@ export async function getAudioConfigById(id?: number | null, apiKey?: string, us
 
 export async function getConfigById(id: number, apiKey?: string, userId?: string): Promise<AIConfig | null> {
   const uid = resolveUserId(userId)
-  const [row] = await db.select().from(schema.aiServiceConfigs)
+  let [row] = await db.select().from(schema.aiServiceConfigs)
     .where(and(
       eq(schema.aiServiceConfigs.id, id),
       eq(schema.aiServiceConfigs.userId, uid),
     ))
+  if (!row && uid !== DEFAULT_USER_ID) {
+    ;[row] = await db.select().from(schema.aiServiceConfigs)
+      .where(and(
+        eq(schema.aiServiceConfigs.id, id),
+        eq(schema.aiServiceConfigs.userId, DEFAULT_USER_ID),
+      ))
+  }
   if (!row || !row.isActive) {
     logTaskWarn('AIConfig', 'config-by-id-missing', { configId: id, userId: uid })
     return null

@@ -6,6 +6,7 @@ import { generateImage } from '../services/image-generation.js'
 import { splitGridImage } from '../services/grid-split.js'
 import { createAgent } from '../agents/index.js'
 import { logTaskError, logTaskPayload, logTaskProgress } from '../utils/task-logger.js'
+import '../middleware/context.js'
 
 const app = new Hono()
 
@@ -218,9 +219,12 @@ async function buildGridCellPrompts(
   rows: number,
   cols: number,
   referenceAssets: Array<{ path: string; label: string; kind: string; imageLabel: string }>,
+  dramaStyle: string = '',
 ) {
   if (!storyboards.length) return []
   const storyboardCharacterIds = await getStoryboardCharacterIds(storyboards.map((sb) => sb.id))
+  const style = (dramaStyle || '').trim() || 'cinematic'
+  const styleTag = `${style} art style`
 
   if (mode === 'multi_ref') {
     const sb = storyboards[0]
@@ -239,7 +243,7 @@ async function buildGridCellPrompts(
     return Array.from({ length: rows * cols }, (_, i) => ({
       shot_number: sb.storyboardNumber,
       frame_type: 'reference',
-      prompt: `${cellLabel(i, rows, cols)}: ${buildStoryboardReferenceHints(sb, referenceAssets, storyboardCharacterIds).join('、')}${buildStoryboardReferenceHints(sb, referenceAssets, storyboardCharacterIds).length ? '，' : ''}${desc}, ${angles[i % angles.length]}`,
+      prompt: `${cellLabel(i, rows, cols)}: ${buildStoryboardReferenceHints(sb, referenceAssets, storyboardCharacterIds).join('、')}${buildStoryboardReferenceHints(sb, referenceAssets, storyboardCharacterIds).length ? '，' : ''}${desc}, ${styleTag}, ${angles[i % angles.length]}`,
     }))
   }
 
@@ -254,8 +258,8 @@ async function buildGridCellPrompts(
         shot_number: sb.storyboardNumber,
         frame_type: isFirst ? 'first_frame' : 'last_frame',
         prompt: isFirst
-          ? `${cellLabel(i, rows, cols)}，首帧：${refs.length ? `参考${refs.join('、')}，` : ''}${desc}${sb.location ? `, ${sb.location}` : ''}${sb.shotType ? `, ${sb.shotType}` : ''}`
-          : `${cellLabel(i, rows, cols)}，尾帧：${refs.length ? `参考${refs.join('、')}，` : ''}${desc}${motion ? `, ${motion}` : ''}${sb.location ? `, ${sb.location}` : ''}${sb.shotType ? `, ${sb.shotType}` : ''}`,
+          ? `${cellLabel(i, rows, cols)}，首帧：${refs.length ? `参考${refs.join('、')}，` : ''}${desc}${sb.location ? `, ${sb.location}` : ''}${sb.shotType ? `, ${sb.shotType}` : ''}, ${styleTag}`
+          : `${cellLabel(i, rows, cols)}，尾帧：${refs.length ? `参考${refs.join('、')}，` : ''}${desc}${motion ? `, ${motion}` : ''}${sb.location ? `, ${sb.location}` : ''}${sb.shotType ? `, ${sb.shotType}` : ''}, ${styleTag}`,
       }
     })
   }
@@ -266,7 +270,7 @@ async function buildGridCellPrompts(
     return {
       shot_number: sb.storyboardNumber,
       frame_type: 'first_frame',
-      prompt: `${cellLabel(index, rows, cols)}：${refs.length ? `参考${refs.join('、')}，` : ''}${desc}${sb.location ? `, ${sb.location}` : ''}${sb.shotType ? `, ${sb.shotType}` : ''}, opening scene`,
+      prompt: `${cellLabel(index, rows, cols)}：${refs.length ? `参考${refs.join('、')}，` : ''}${desc}${sb.location ? `, ${sb.location}` : ''}${sb.shotType ? `, ${sb.shotType}` : ''}, ${styleTag}, opening scene`,
     }
   })
 }
@@ -350,8 +354,9 @@ async function tryAgentGridPrompt(
   cols: number,
   mode: string,
   referenceLegend: string,
+  apiKey?: string,
 ) {
-  const agent = await createAgent('grid_prompt_generator', episodeId, dramaId)
+  const agent = await createAgent('grid_prompt_generator', episodeId, dramaId, apiKey)
   if (!agent) return null
 
   const result = await agent.generate(
@@ -384,6 +389,7 @@ async function tryAgentGridPrompt(
 // POST /grid/prompt
 app.post('/prompt', async (c) => {
   const body = await c.req.json()
+  const apiKey = c.get('apiKey') || ''
   const {
     storyboard_ids,
     drama_id,
@@ -428,6 +434,7 @@ app.post('/prompt', async (c) => {
       actualCols,
       mode,
       referenceLegend,
+      apiKey,
     )
 
     if (agentPayload?.grid_prompt) {
@@ -457,7 +464,7 @@ app.post('/prompt', async (c) => {
   }
 
   const gridPrompt = await buildGridPrompt(mode, storyboards, actualRows, actualCols, dramaStyle, referenceAssets)
-  const cellPrompts = await buildGridCellPrompts(mode, storyboards, actualRows, actualCols, referenceAssets)
+  const cellPrompts = await buildGridCellPrompts(mode, storyboards, actualRows, actualCols, referenceAssets, dramaStyle)
   logTaskProgress('GridPrompt', 'fallback-used', {
     episodeId: resolvedEpisodeId,
     dramaId: drama_id,
@@ -480,6 +487,8 @@ app.post('/prompt', async (c) => {
 // POST /grid/generate
 app.post('/generate', async (c) => {
   const body = await c.req.json()
+  const apiKey = c.get('apiKey') || ''
+  const userId = c.get('userId') || 'standalone'
   const {
     storyboard_ids,
     drama_id,
@@ -506,6 +515,14 @@ app.post('/generate', async (c) => {
     dramaStyle = drama?.style || ''
   }
 
+  // 复用所在剧集的图片模型配置（与角色/场景生图保持一致）
+  const episodeId = Number(storyboards[0]?.episodeId || 0)
+  let imageConfigId: number | undefined
+  if (episodeId) {
+    const [ep] = await db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId))
+    imageConfigId = ep?.imageConfigId ?? undefined
+  }
+
   const referenceAssets = await collectGridReferenceAssets(storyboards)
   const prompt = custom_prompt || await buildGridPrompt(mode, storyboards, rows, cols, dramaStyle, referenceAssets)
   const referenceImages = referenceAssets.map((asset) => asset.path)
@@ -523,6 +540,9 @@ app.post('/generate', async (c) => {
       size,
       frameType: `grid_${mode}_${actualRows}x${actualCols}`,
       referenceImages,
+      configId: imageConfigId,
+      apiKey,
+      userId,
     })
 
     logTaskProgress('GridGenerate', 'reference-images', {
@@ -571,10 +591,13 @@ app.post('/split', async (c) => {
     const cells = await splitGridImage(imgRecord.localPath, rows, cols)
 
     const results: any[] = []
-    for (let i = 0; i < assignments.length && i < cells.length; i++) {
-      const { storyboard_id, frame_type } = assignments[i]
-      const cell = cells[i]
+    for (let i = 0; i < assignments.length; i++) {
+      const a = assignments[i]
+      const { storyboard_id, frame_type } = a
       if (!storyboard_id) continue
+      const cellIndex = Number.isInteger(a.cell_index) ? Number(a.cell_index) : i
+      if (cellIndex < 0 || cellIndex >= cells.length) continue
+      const cell = cells[cellIndex]
 
       const update: Record<string, any> = { updatedAt: now() }
       if (frame_type === 'first_frame') update.firstFrameImage = cell.localPath
@@ -587,7 +610,7 @@ app.post('/split', async (c) => {
       }
 
       await db.update(schema.storyboards).set(update).where(eq(schema.storyboards.id, storyboard_id))
-      results.push({ storyboard_id, frame_type, local_path: cell.localPath })
+      results.push({ storyboard_id, frame_type, cell_index: cellIndex, local_path: cell.localPath })
     }
 
     return success(c, { cells: results })

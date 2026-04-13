@@ -744,6 +744,7 @@
               <span class="tag">{{ lockedImageConfigLabel }}</span>
               <span v-if="chars.length > visualChars.length" class="tag">旁白仅保留声音</span>
               <div class="ml-auto flex gap-1">
+                <button class="btn btn-sm" @click="addCharacter">+ 新增角色</button>
                 <button class="btn btn-sm" @click="batchCharImages">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                   批量生成
@@ -775,6 +776,9 @@
                     <button class="btn btn-sm btn-ghost ml-auto" title="编辑提示词" @click="flipCard('char', c.id)">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
+                    <button class="btn btn-sm btn-ghost" title="删除角色" @click="deleteCharacter(c)">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                    </button>
                     <button class="btn btn-sm" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id, cardPrompts[`char-${c.id}`]?.trim())">{{ isPendingCharImage(c.id) ? '生成中' : '生成' }}</button>
                   </div>
                 </template>
@@ -797,6 +801,7 @@
               <span class="dim" style="font-size:12px">{{ scenes.length }} 个场景</span>
               <span class="tag">{{ lockedImageConfigLabel }}</span>
               <div class="ml-auto flex gap-1">
+                <button class="btn btn-sm" @click="addScene">+ 新增场景</button>
                 <button class="btn btn-sm" @click="batchSceneImages">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                   批量生成
@@ -827,6 +832,9 @@
                     <span class="dim" style="font-size:10px">{{ (s.image_url || s.imageUrl) ? '已生成' : (isPendingSceneImage(s.id) ? '生成中' : '待生成') }}</span>
                     <button class="btn btn-sm btn-ghost ml-auto" title="编辑提示词" @click="flipCard('scene', s.id)">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn btn-sm btn-ghost" title="删除场景" @click="deleteScene(s)">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                     </button>
                     <button class="btn btn-sm" :disabled="isPendingSceneImage(s.id)" @click="genSceneImg(s.id, cardPrompts[`scene-${s.id}`]?.trim())">{{ isPendingSceneImage(s.id) ? '生成中' : '生成' }}</button>
                   </div>
@@ -1044,7 +1052,7 @@
                   <div class="grid-mode-tabs">
                     <button v-for="m in gridModes" :key="m.id"
                       :class="['grid-mode-tab', { active: gridMode === m.id }]"
-                      @click="gridMode = m.id; gridSelected = []; gridSingleTarget = null; gridAssignmentsState = []">
+                      @click="switchGridMode(m.id)">
                       <span style="font-weight:600">{{ m.label }}</span>
                       <span class="dim" style="font-size:11px">{{ m.desc }}</span>
                     </button>
@@ -1445,6 +1453,90 @@
             <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
           </svg>
         </button>
+      </div>
+
+      <div v-if="confirmModal.open" class="overlay" @click.self="closeConfirm">
+        <div class="card confirm-modal">
+          <div class="confirm-modal-head">
+            <div class="confirm-modal-title">{{ confirmModal.title }}</div>
+            <button class="btn btn-ghost btn-icon" @click="closeConfirm" title="关闭">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="confirm-modal-body">
+            <div class="confirm-modal-message">{{ confirmModal.message }}</div>
+            <div v-if="confirmModal.warning" class="confirm-modal-warning">{{ confirmModal.warning }}</div>
+          </div>
+          <div class="confirm-modal-foot">
+            <button class="btn" @click="closeConfirm">{{ confirmModal.cancelLabel }}</button>
+            <button :class="['btn ml-auto', confirmModal.danger ? 'btn-danger' : 'btn-primary']" @click="acceptConfirm" autofocus>
+              {{ confirmModal.confirmLabel }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="assetModal.open" class="overlay" @click.self="assetModal.open = false">
+        <div class="card asset-modal">
+          <div class="asset-modal-head">
+            <div class="asset-modal-title">
+              {{ assetModal.type === 'char' ? '新增角色' : '新增场景' }}
+            </div>
+            <button class="btn btn-ghost btn-icon" @click="assetModal.open = false" title="关闭">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="asset-modal-body">
+            <div class="asset-modal-style-hint">
+              当前风格：<strong>{{ assetModalStylePreview }}</strong>
+              <span class="dim">（默认提示词会自动注入）</span>
+            </div>
+
+            <template v-if="assetModal.type === 'char'">
+              <label class="field">
+                <span class="field-label">姓名<span class="req">*</span></span>
+                <input class="input" v-model="assetModal.char.name" placeholder="例如：林小满" @keyup.enter="submitAssetModal" />
+              </label>
+              <label class="field">
+                <span class="field-label">定位</span>
+                <input class="input" v-model="assetModal.char.role" placeholder="主角 / 配角 / 反派 / 旁白…" />
+              </label>
+              <label class="field">
+                <span class="field-label">外貌特征</span>
+                <textarea class="textarea" v-model="assetModal.char.appearance" rows="2" placeholder="短发，穿白衬衫，二十多岁…" />
+              </label>
+              <div v-if="assetModalCharPromptPreview" class="asset-modal-preview">
+                <div class="asset-modal-preview-label">生成用默认提示词预览</div>
+                <div class="asset-modal-preview-body">{{ assetModalCharPromptPreview }}</div>
+              </div>
+            </template>
+
+            <template v-else>
+              <label class="field">
+                <span class="field-label">地点<span class="req">*</span></span>
+                <input class="input" v-model="assetModal.scene.location" placeholder="例如：咖啡馆 / 天台" @keyup.enter="submitAssetModal" />
+              </label>
+              <label class="field">
+                <span class="field-label">时间/光线</span>
+                <input class="input" v-model="assetModal.scene.time" placeholder="白天 / 黄昏 / 夜晚…" />
+              </label>
+              <label class="field">
+                <span class="field-label">场景描述</span>
+                <textarea class="textarea" v-model="assetModal.scene.prompt" rows="3" placeholder="氛围、光线、陈设…（留空则用地点+时间自动生成）" />
+              </label>
+              <div v-if="assetModalScenePromptPreview" class="asset-modal-preview">
+                <div class="asset-modal-preview-label">生成用默认提示词预览</div>
+                <div class="asset-modal-preview-body">{{ assetModalScenePromptPreview }}</div>
+              </div>
+            </template>
+          </div>
+          <div class="asset-modal-foot">
+            <button class="btn" @click="assetModal.open = false" :disabled="assetModal.saving">取消</button>
+            <button class="btn btn-primary ml-auto" @click="submitAssetModal" :disabled="assetModal.saving">
+              {{ assetModal.saving ? '保存中…' : '确定' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div v-if="imageViewer.open && imageViewer.src" class="overlay image-viewer-overlay" @click.self="closeImageViewer">
@@ -1861,6 +1953,18 @@ function openGridTool() {
   gridDialog.value = true
 }
 
+function switchGridMode(nextMode) {
+  if (gridMode.value === nextMode) return
+  gridMode.value = nextMode
+  gridSelected.value = []
+  gridSingleTarget.value = null
+  gridAssignmentsState.value = []
+  gridPromptText.value = ''
+  gridCellPrompts.value = []
+  gridPromptSource.value = ''
+  gridPromptStatus.value = ''
+}
+
 function persistGridImagePath(value) {
   if (typeof window === 'undefined') return
   if (!value) {
@@ -1999,12 +2103,16 @@ async function generateGridPrompt() {
 async function startGridGen() {
   let rows, cols, ids
   if (gridMode.value === 'multi_ref') {
-    rows = gridAutoLayout.value.rows; cols = gridAutoLayout.value.cols; ids = [gridSingleTarget.value]
+    rows = gridAutoLayout.value.rows; cols = gridAutoLayout.value.cols
+    if (!gridSingleTarget.value) { toast.warning('请先选择目标镜头'); return }
+    ids = [gridSingleTarget.value]
   } else {
     rows = gridAutoLayout.value.rows; cols = gridAutoLayout.value.cols; ids = gridSelected.value.slice(0, gridTotalCells.value)
     if (gridMode.value === 'first_last') ids = [...gridSelected.value]
   }
-  gridActiveShotIds.value = ids.filter(Boolean)
+  ids = ids.filter(Boolean)
+  if (!ids.length) { toast.warning('请先选择镜头'); return }
+  gridActiveShotIds.value = ids
   gridActualLayout.value = { rows, cols }
   if (!gridAssignmentsState.value.length) resetGridAssignments()
   gridStep.value = 2
@@ -2107,8 +2215,12 @@ async function doGridSplit() {
   const { rows, cols } = gridActualLayout.value
   try {
     const assignments = gridAssignments.value
+      .map((item, index) => ({
+        cell_index: index,
+        storyboard_id: item.storyboard_id,
+        frame_type: item.frame_type,
+      }))
       .filter(item => !!item.storyboard_id)
-      .map(item => ({ storyboard_id: item.storyboard_id, frame_type: item.frame_type }))
     if (!assignments.length) {
       toast.warning('请至少分配一个格子')
       return
@@ -2524,6 +2636,213 @@ function doBreakdown() {
 async function genSample(id) { try { await characterAPI.voiceSample(id, epId.value); toast.success('试听已生成'); refresh() } catch (e) { toast.error(e.message) } }
 async function addShot() { await storyboardAPI.create({ episode_id: epId.value, storyboard_number: sbs.value.length + 1, title: `镜头${sbs.value.length + 1}`, duration: 10 }); refresh() }
 
+const assetModal = reactive({
+  open: false,
+  type: 'char', // 'char' | 'scene'
+  saving: false,
+  char: { name: '', role: '', appearance: '' },
+  scene: { location: '', time: '', prompt: '' },
+})
+function openCharModal() {
+  assetModal.type = 'char'
+  assetModal.char = { name: '', role: '', appearance: '' }
+  assetModal.open = true
+}
+function openSceneModal() {
+  assetModal.type = 'scene'
+  assetModal.scene = { location: '', time: '', prompt: '' }
+  assetModal.open = true
+}
+const assetModalStylePreview = computed(() => dramaStyleTag())
+const assetModalCharPromptPreview = computed(() => {
+  const { name, appearance } = assetModal.char
+  if (!name.trim()) return ''
+  return withStyle(`${name}, ${appearance.trim() || '人物立绘'}, 高质量, 正面, 白色背景`)
+})
+const assetModalScenePromptPreview = computed(() => {
+  const { location, time, prompt } = assetModal.scene
+  if (!location.trim()) return ''
+  const base = prompt.trim() || `${location}, ${time || ''}, 高质量场景, 电影感`
+  return withStyle(base)
+})
+
+async function refreshCharsSilently() {
+  if (!epId.value) return
+  try { chars.value = await episodeAPI.characters(epId.value) } catch {}
+}
+async function refreshScenesSilently() {
+  if (!epId.value) return
+  try { scenes.value = await episodeAPI.scenes(epId.value) } catch {}
+}
+
+let tempIdCounter = -1
+function nextTempId() { return tempIdCounter-- }
+
+function submitAssetModal() {
+  if (assetModal.saving) return
+  if (assetModal.type === 'char') {
+    const { name, role, appearance } = assetModal.char
+    const trimmedName = name.trim()
+    if (!trimmedName) { toast.error('角色姓名必填'); return }
+
+    const temp = {
+      id: nextTempId(),
+      name: trimmedName,
+      role: role.trim(),
+      appearance: appearance.trim(),
+      description: '',
+      personality: '',
+      image_url: '',
+      imageUrl: '',
+      _optimistic: true,
+    }
+    chars.value = [...chars.value, temp]
+    assetModal.open = false
+    toast.success('角色已添加')
+
+    characterAPI.create({
+      drama_id: dramaId,
+      episode_id: epId.value,
+      name: trimmedName,
+      role: role.trim(),
+      appearance: appearance.trim(),
+    }).then(refreshCharsSilently).catch(err => {
+      chars.value = chars.value.filter(c => c.id !== temp.id)
+      toast.error(err.message || '角色保存失败，已回滚')
+    })
+  } else {
+    const { location, time, prompt } = assetModal.scene
+    const trimmedLocation = location.trim()
+    if (!trimmedLocation) { toast.error('场景地点必填'); return }
+    const base = prompt.trim() || `${trimmedLocation}, ${time.trim() || ''}, 高质量场景, 电影感`
+    const storedPrompt = withStyle(base)
+
+    const temp = {
+      id: nextTempId(),
+      location: trimmedLocation,
+      time: time.trim(),
+      prompt: storedPrompt,
+      image_url: '',
+      imageUrl: '',
+      _optimistic: true,
+    }
+    scenes.value = [...scenes.value, temp]
+    assetModal.open = false
+    toast.success('场景已添加')
+
+    sceneAPI.create({
+      drama_id: dramaId,
+      episode_id: epId.value,
+      location: trimmedLocation,
+      time: time.trim(),
+      prompt: storedPrompt,
+    }).then(refreshScenesSilently).catch(err => {
+      scenes.value = scenes.value.filter(s => s.id !== temp.id)
+      toast.error(err.message || '场景保存失败，已回滚')
+    })
+  }
+}
+
+function addCharacter() { openCharModal() }
+function deleteCharacter(c) {
+  if (c._optimistic || c.id < 0) {
+    toast.warning('角色仍在保存中，请稍后重试')
+    return
+  }
+  const linked = relatedStoryboardCount('character', c.id)
+  openConfirm({
+    title: '删除角色',
+    message: `确认删除角色「${c.name}」？`,
+    warning: linked > 0
+      ? `该角色已在 ${linked} 个镜头中被引用。删除后相关镜头将失去该角色的形象参考，分镜/宫格图仍可生成但风格一致性可能下降。`
+      : '',
+    confirmLabel: '删除',
+    danger: true,
+    onConfirm: () => {
+      const snapshot = chars.value
+      if (!snapshot.some(x => x.id === c.id)) return
+      chars.value = snapshot.filter(x => x.id !== c.id)
+      toast.success('已删除')
+      characterAPI.del(c.id).catch(err => {
+        chars.value = snapshot
+        toast.error(err.message || '删除失败，已回滚')
+      })
+    },
+  })
+}
+
+function addScene() { openSceneModal() }
+function deleteScene(s) {
+  if (s._optimistic || s.id < 0) {
+    toast.warning('场景仍在保存中，请稍后重试')
+    return
+  }
+  const linked = relatedStoryboardCount('scene', s.id)
+  openConfirm({
+    title: '删除场景',
+    message: `确认删除场景「${s.location}」？`,
+    warning: linked > 0
+      ? `该场景已在 ${linked} 个镜头中被引用。删除后这些镜头的 scene_id 将变为孤立（不影响已存储的镜头位置/描述文本，但无法再对场景图重新生成或作为参考图）。`
+      : '',
+    confirmLabel: '删除',
+    danger: true,
+    onConfirm: () => {
+      const snapshot = scenes.value
+      if (!snapshot.some(x => x.id === s.id)) return
+      scenes.value = snapshot.filter(x => x.id !== s.id)
+      toast.success('已删除')
+      sceneAPI.del(s.id).catch(err => {
+        scenes.value = snapshot
+        toast.error(err.message || '删除失败，已回滚')
+      })
+    },
+  })
+}
+
+const confirmModal = reactive({
+  open: false,
+  title: '',
+  message: '',
+  warning: '',
+  confirmLabel: '确定',
+  cancelLabel: '取消',
+  danger: false,
+  onConfirm: null,
+})
+function openConfirm(opts) {
+  confirmModal.title = opts.title || '确认'
+  confirmModal.message = opts.message || ''
+  confirmModal.warning = opts.warning || ''
+  confirmModal.confirmLabel = opts.confirmLabel || '确定'
+  confirmModal.cancelLabel = opts.cancelLabel || '取消'
+  confirmModal.danger = !!opts.danger
+  confirmModal.onConfirm = typeof opts.onConfirm === 'function' ? opts.onConfirm : null
+  confirmModal.open = true
+}
+function closeConfirm() {
+  confirmModal.open = false
+  confirmModal.onConfirm = null
+}
+function acceptConfirm() {
+  const fn = confirmModal.onConfirm
+  confirmModal.open = false
+  confirmModal.onConfirm = null
+  if (typeof fn === 'function') fn()
+}
+
+function relatedStoryboardCount(kind, id) {
+  try {
+    if (kind === 'scene') return (sbs.value || []).filter(sb => sb.scene_id === id || sb.sceneId === id).length
+    if (kind === 'character') {
+      return (sbs.value || []).filter(sb => {
+        const ids = sb.character_ids || sb.characterIds || []
+        return Array.isArray(ids) && ids.includes(id)
+      }).length
+    }
+  } catch {}
+  return 0
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -2541,11 +2860,23 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
 const flippedCards = reactive({})
 const cardPrompts = reactive({})
 
+function dramaStyleTag() {
+  const style = (drama.value?.style || '').trim() || 'cinematic'
+  return `${style} art style, consistent art style`
+}
+function withStyle(prompt) {
+  const tag = dramaStyleTag()
+  const base = (prompt || '').trim()
+  if (!base) return tag
+  const styleWord = tag.split(' ')[0]
+  return new RegExp(`${styleWord}\\s+art\\s+style`, 'i').test(base) ? base : `${base}, ${tag}`
+}
 function getDefaultCharPrompt(c) {
-  return `${c.name}, ${c.appearance || c.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  return withStyle(`${c.name}, ${c.appearance || c.description || '人物立绘'}, 高质量, 正面, 白色背景`)
 }
 function getDefaultScenePrompt(s) {
-  return s.prompt || `${s.location}, ${s.time || ''}, 高质量场景, 电影感`
+  const base = (s.prompt || '').trim() || `${s.location}, ${s.time || ''}, 高质量场景, 电影感`
+  return withStyle(base)
 }
 
 function flipCard(type, id) {
@@ -3432,6 +3763,34 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .extract-list { padding: 8px 14px; flex: 1; min-height: 0; overflow-y: auto; }
 .extract-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
 .extract-row + .extract-row { border-top: 1px solid var(--border); }
+.extract-row-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .15s ease; margin-left: auto; }
+.extract-row:hover .extract-row-actions { opacity: 1; }
+.extract-empty-hint { padding: 14px 0; text-align: center; color: var(--text-muted); font-size: 12px; }
+
+.asset-modal { width: min(480px, 92vw); display: flex; flex-direction: column; max-height: 86vh; }
+.asset-modal-head { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.asset-modal-title { font-size: 15px; font-weight: 600; font-family: var(--font-display); flex: 1; }
+.asset-modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.asset-modal-style-hint { font-size: 12px; color: var(--text-muted); padding: 8px 10px; background: var(--surface-muted, rgba(127,127,127,0.08)); border-radius: 6px; }
+.asset-modal-style-hint strong { color: var(--text); font-weight: 600; }
+.asset-modal-preview { border: 1px dashed var(--border); border-radius: 6px; padding: 8px 10px; }
+.asset-modal-preview-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.asset-modal-preview-body { font-size: 12px; line-height: 1.55; word-break: break-word; }
+.asset-modal-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
+.asset-modal .field { display: flex; flex-direction: column; gap: 4px; }
+.asset-modal .field-label { font-size: 12px; color: var(--text-muted); }
+.asset-modal .field-label .req { color: #e05252; margin-left: 2px; }
+
+.confirm-modal { width: min(420px, 92vw); display: flex; flex-direction: column; }
+.confirm-modal-head { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.confirm-modal-title { font-size: 15px; font-weight: 600; font-family: var(--font-display); flex: 1; }
+.confirm-modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.confirm-modal-message { font-size: 14px; line-height: 1.55; color: var(--text); }
+.confirm-modal-warning { font-size: 12px; line-height: 1.55; color: #a05b1e; background: rgba(224, 138, 44, 0.08); border-left: 3px solid #e08a2c; border-radius: 4px; padding: 8px 10px; }
+.confirm-modal-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
+.btn.btn-danger { background: #e05252; color: #fff; border-color: #d04141; }
+.btn.btn-danger:hover { background: #d04141; }
+html.dark .confirm-modal-warning { color: #ffb878; background: rgba(224, 138, 44, 0.15); }
 .char-avatar {
   width: 30px; height: 30px; border-radius: 50%;
   background: var(--accent-bg); color: var(--accent-text);

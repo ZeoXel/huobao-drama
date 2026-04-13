@@ -62,6 +62,10 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
       const script = ep.scriptContent || ep.content
       if (!script) return { error: 'Episode has no script' }
 
+      const [drama] = await db.select().from(schema.dramas)
+        .where(eq(schema.dramas.id, dramaId))
+      const dramaStyle = (drama?.style || '').trim() || 'cinematic'
+
       const charLinks = await db.select().from(schema.episodeCharacters)
         .where(eq(schema.episodeCharacters.episodeId, episodeId))
       const sceneLinks = await db.select().from(schema.episodeScenes)
@@ -111,6 +115,7 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
           episode_number: ep.episodeNumber,
           description: ep.description || '',
         },
+        drama_style: dramaStyle,
         script,
         characters,
         scenes,
